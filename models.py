@@ -24,10 +24,19 @@ class Order(Base):
     due_date = Column(Date, nullable=True)
 
 
-class TeamSchedule(Base):
-    __tablename__ = "team_schedule"
+class TeamWeeklySchedule(Base):
+    """Recurring weekly pattern: does this team normally work on this weekday?"""
+    __tablename__ = "team_weekly_schedule"
 
     id = Column(Integer, primary_key=True, index=True)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
-    date = Column(Date, nullable=False)
+    day_of_week = Column(Integer, nullable=False)  # 0=Monday ... 6=Sunday
     is_working_day = Column(Boolean, nullable=False, default=True)
+
+class Inventory(Base):
+    __tablename__ = "inventory"
+ 
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, unique=True)
+    quantity_on_hand = Column(Numeric, nullable=False, default=0)
+ 

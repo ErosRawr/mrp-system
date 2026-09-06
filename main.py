@@ -2,13 +2,23 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import date
+from calculations import calculate_material_requirements
 
 import models
 from database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="MRP System", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -74,17 +84,25 @@ def create_order(
 def list_orders(db: Session = Depends(get_db)):
     return db.query(models.Order).all()
 
-@app.post("/team-schedule")
-def create_schedule_entry(
+@app.post("/team-weekly-schedule")
+def set_weekly_schedule(
     team_id: int,
-    date: date,
+    day_of_week: int,  # 0=Monday ... 6=Sunday
     is_working_day: bool,
     db: Session = Depends(get_db),
 ):
-    entry = models.TeamSchedule(
-        team_id=team_id,
-        date=date,
-        is_working_day=is_working_day,
+    existing = db.query(models.TeamWeeklySchedule).filter(
+        models.TeamWeeklySchedule.team_id == team_id,
+        models.TeamWeeklySchedule.day_of_week == day_of_week,
+    ).first()
+    if existing:
+        existing.is_working_day = is_working_day
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    entry = models.TeamWeeklySchedule(
+        team_id=team_id, day_of_week=day_of_week, is_working_day=is_working_day
     )
     db.add(entry)
     db.commit()
@@ -92,6 +110,39 @@ def create_schedule_entry(
     return entry
 
 
-@app.get("/team-schedule")
-def list_schedule(db: Session = Depends(get_db)):
-    return db.query(models.TeamSchedule).order_by(models.TeamSchedule.date).all()
+@app.get("/team-weekly-schedule")
+def list_weekly_schedule(db: Session = Depends(get_db)):
+    return db.query(models.TeamWeeklySchedule).all()
+
+@app.get("/orders/{order_id}/requirements")
+def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
+    result = calculate_material_requirements(order_id, db)
+    if result is None:
+        return {"error": "Order or entry team not found"}
+    return result
+
+@app.post("/inventory")
+def set_inventory(
+    team_id: int,
+    quantity_on_hand: float,
+    db: Session = Depends(get_db),
+):
+    existing = db.query(models.Inventory).filter(
+        models.Inventory.team_id == team_id
+    ).first()
+    if existing:
+        existing.quantity_on_hand = quantity_on_hand
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    entry = models.Inventory(team_id=team_id, quantity_on_hand=quantity_on_hand)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@app.get("/inventory")
+def list_inventory(db: Session = Depends(get_db)):
+    return db.query(models.Inventory).all()

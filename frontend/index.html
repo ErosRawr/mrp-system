@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MRP System</title>
+  <style>
+    /* ── Reset ────────────────────────────────────────────────── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      padding: 1rem;
+    }
+
+    h1 { margin-bottom: .75rem; }
+    h2 { margin-bottom: .5rem; }
+
+    /* ── Tabs ─────────────────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid #ccc;
+    }
+    .tab-bar button {
+      padding: .5rem 1rem;
+      border: 1px solid #ccc;
+      border-bottom: none;
+      background: #e8e8e8;
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    .tab-bar button.active {
+      background: #fff;
+      font-weight: bold;
+      border-color: #999;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Tables ───────────────────────────────────────────────── */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 1rem;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: .35rem .5rem;
+      text-align: left;
+    }
+    th { background: #ddd; }
+
+    /* ── Forms ────────────────────────────────────────────────── */
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      margin-bottom: .75rem;
+      align-items: flex-end;
+    }
+    .form-row label {
+      display: flex;
+      flex-direction: column;
+      font-size: .85rem;
+    }
+    .form-row input,
+    .form-row select {
+      padding: .3rem .4rem;
+      font-size: .9rem;
+    }
+    button.action {
+      padding: .4rem .9rem;
+      cursor: pointer;
+    }
+
+    /* ── Status ───────────────────────────────────────────────── */
+    .status {
+      margin-top: .5rem;
+      font-style: italic;
+      color: #555;
+    }
+    .status.error { color: crimson; }
+
+    /* ── Requirements result ──────────────────────────────────── */
+    #reqSummary { margin-bottom: .75rem; }
+  </style>
+</head>
+<body>
+
+<h1>MRP System</h1>
+
+<div class="tab-bar" id="tabBar">
+  <button class="active" data-tab="teams">Teams</button>
+  <button data-tab="orders">Orders</button>
+  <button data-tab="inventory">Inventory</button>
+  <button data-tab="schedule">Weekly Schedule</button>
+  <button data-tab="requirements">Requirements Calculator</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 1 — TEAMS
+     ═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-teams">
+  <h2>Teams</h2>
+
+  <div class="form-row">
+    <label>Name         <input id="teamName" /></label>
+    <label>Sequence     <input id="teamSeq" type="number" min="1" /></label>
+    <label>Capacity/day <input id="teamCap" type="number" step="0.01" /></label>
+    <label>Efficiency   <input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></label>
+    <label>Sells direct
+      <select id="teamSells">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>
+    </label>
+    <button class="action" id="btnCreateTeam">Create</button>
+  </div>
+  <div class="status" id="teamStatus"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Name</th><th>Sequence</th>
+        <th>Capacity</th><th>Efficiency</th><th>Sells Direct</th>
+      </tr>
+    </thead>
+    <tbody id="teamsBody"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 2 — ORDERS
+     ═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-orders">
+  <h2>Orders</h2>
+
+  <div class="form-row">
+    <label>Customer    <input id="orderCust" /></label>
+    <label>Quantity    <input id="orderQty" type="number" step="0.01" /></label>
+    <label>Entry team
+      <select id="orderTeam"></select>
+    </label>
+    <label>Order date  <input id="orderDate" type="date" /></label>
+    <label>Due date    <input id="orderDue"  type="date" /></label>
+    <button class="action" id="btnCreateOrder">Create</button>
+  </div>
+  <div class="status" id="orderStatus"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Customer</th><th>Qty</th>
+        <th>Entry Team ID</th><th>Order Date</th><th>Due Date</th>
+      </tr>
+    </thead>
+    <tbody id="ordersBody"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 3 — INVENTORY
+     ═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-inventory">
+  <h2>Inventory</h2>
+
+  <div class="form-row">
+    <label>Team
+      <select id="invTeam"></select>
+    </label>
+    <label>Qty on hand <input id="invQty" type="number" step="0.01" /></label>
+    <button class="action" id="btnSetInv">Set</button>
+  </div>
+  <div class="status" id="invStatus"></div>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Team ID</th><th>Qty On Hand</th></tr>
+    </thead>
+    <tbody id="invBody"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 4 — WEEKLY SCHEDULE
+     ═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-schedule">
+  <h2>Weekly Schedule</h2>
+
+  <div class="form-row">
+    <label>Team
+      <select id="schedTeam"></select>
+    </label>
+    <label>Day
+      <select id="schedDay">
+        <option value="0">Monday</option>
+        <option value="1">Tuesday</option>
+        <option value="2">Wednesday</option>
+        <option value="3">Thursday</option>
+        <option value="4">Friday</option>
+        <option value="5">Saturday</option>
+        <option value="6">Sunday</option>
+      </select>
+    </label>
+    <label>Working?
+      <select id="schedWorking">
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </label>
+    <button class="action" id="btnSetSched">Set</button>
+  </div>
+  <div class="status" id="schedStatus"></div>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Team ID</th><th>Day</th><th>Working?</th></tr>
+    </thead>
+    <tbody id="schedBody"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TAB 5 — REQUIREMENTS CALCULATOR
+     ═══════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-requirements">
+  <h2>Requirements Calculator</h2>
+
+  <div class="form-row">
+    <label>Order
+      <select id="reqOrder"></select>
+    </label>
+    <button class="action" id="btnCalcReq">Calculate</button>
+  </div>
+  <div class="status" id="reqStatus"></div>
+
+  <div id="reqSummary"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Team</th><th>Seq</th>
+        <th>Gross Needed</th><th>On Hand</th><th>Net Needed</th>
+        <th>Input Needed</th><th>Efficiency</th><th>Capacity/day</th>
+        <th>Working Days</th><th>Calendar Days</th>
+        <th>Est. Completion</th><th>Schedule Incomplete?</th>
+      </tr>
+    </thead>
+    <tbody id="reqBody"></tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+const API = "http://localhost:8000";
+
+/* ── Helpers ──────────────────────────────────────────────── */
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+function qs(id)  { return document.getElementById(id); }
+function val(id) { return qs(id).value; }
+
+function setStatus(id, msg, isError = false) {
+  const el = qs(id);
+  el.textContent = msg;
+  el.className = "status" + (isError ? " error" : "");
+}
+
+const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+/* ── Tab switching ────────────────────────────────────────── */
+
+document.querySelectorAll("#tabBar button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#tabBar button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    qs("tab-" + btn.dataset.tab).classList.add("active");
+    refresh(btn.dataset.tab);
+  });
+});
+
+/* ── Refresh functions ────────────────────────────────────── */
+
+async function refresh(tab) {
+  try {
+    if (tab === "teams")        await loadTeams();
+    if (tab === "orders")     { await populateTeamDropdown("orderTeam"); await loadOrders(); }
+    if (tab === "inventory")  { await populateTeamDropdown("invTeam");   await loadInventory(); }
+    if (tab === "schedule")   { await populateTeamDropdown("schedTeam"); await loadSchedule(); }
+    if (tab === "requirements") { await populateOrderDropdown(); }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function populateTeamDropdown(selectId) {
+  const teams = await api("/teams");
+  const sel = qs(selectId);
+  sel.innerHTML = "";
+  teams.forEach(t => {
+    const o = document.createElement("option");
+    o.value = t.id;
+    o.textContent = `${t.name} (#${t.id})`;
+    sel.appendChild(o);
+  });
+}
+
+async function populateOrderDropdown() {
+  const orders = await api("/orders");
+  const sel = qs("reqOrder");
+  sel.innerHTML = "";
+  orders.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o.id;
+    opt.textContent = `#${o.id} — ${o.customer_name} (${o.quantity_requested})`;
+    sel.appendChild(opt);
+  });
+}
+
+/* ── Teams ────────────────────────────────────────────────── */
+
+async function loadTeams() {
+  const teams = await api("/teams");
+  const body = qs("teamsBody");
+  body.innerHTML = "";
+  teams.forEach(t => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${t.id}</td>
+      <td>${t.name}</td>
+      <td>${t.sequence_order}</td>
+      <td>${t.daily_capacity}</td>
+      <td>${t.efficiency}</td>
+      <td>${t.sells_direct ? "Yes" : "No"}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+qs("btnCreateTeam").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      name:           val("teamName"),
+      sequence_order: val("teamSeq"),
+      daily_capacity: val("teamCap"),
+      efficiency:     val("teamEff"),
+      sells_direct:   val("teamSells"),
+    });
+    await api("/teams?" + params, { method: "POST" });
+    setStatus("teamStatus", "Team created.");
+    await loadTeams();
+  } catch (e) { setStatus("teamStatus", e.message, true); }
+});
+
+/* ── Orders ───────────────────────────────────────────────── */
+
+async function loadOrders() {
+  const orders = await api("/orders");
+  const body = qs("ordersBody");
+  body.innerHTML = "";
+  orders.forEach(o => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${o.id}</td>
+      <td>${o.customer_name}</td>
+      <td>${o.quantity_requested}</td>
+      <td>${o.entry_team_id}</td>
+      <td>${o.order_date}</td>
+      <td>${o.due_date ?? "—"}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+qs("btnCreateOrder").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      customer_name:     val("orderCust"),
+      quantity_requested: val("orderQty"),
+      entry_team_id:     val("orderTeam"),
+      order_date:        val("orderDate"),
+    });
+    const due = val("orderDue");
+    if (due) params.set("due_date", due);
+    await api("/orders?" + params, { method: "POST" });
+    setStatus("orderStatus", "Order created.");
+    await loadOrders();
+  } catch (e) { setStatus("orderStatus", e.message, true); }
+});
+
+/* ── Inventory ────────────────────────────────────────────── */
+
+async function loadInventory() {
+  const inv = await api("/inventory");
+  const body = qs("invBody");
+  body.innerHTML = "";
+  inv.forEach(i => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i.id}</td>
+      <td>${i.team_id}</td>
+      <td>${i.quantity_on_hand}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+qs("btnSetInv").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      team_id:         val("invTeam"),
+      quantity_on_hand: val("invQty"),
+    });
+    await api("/inventory?" + params, { method: "POST" });
+    setStatus("invStatus", "Inventory updated.");
+    await loadInventory();
+  } catch (e) { setStatus("invStatus", e.message, true); }
+});
+
+/* ── Weekly Schedule ──────────────────────────────────────── */
+
+async function loadSchedule() {
+  const sched = await api("/team-weekly-schedule");
+  const body = qs("schedBody");
+  body.innerHTML = "";
+  sched.forEach(s => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${s.id}</td>
+      <td>${s.team_id}</td>
+      <td>${DAY_NAMES[s.day_of_week] ?? s.day_of_week}</td>
+      <td>${s.is_working_day ? "Yes" : "No"}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+qs("btnSetSched").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      team_id:       val("schedTeam"),
+      day_of_week:   val("schedDay"),
+      is_working_day: val("schedWorking"),
+    });
+    await api("/team-weekly-schedule?" + params, { method: "POST" });
+    setStatus("schedStatus", "Schedule updated.");
+    await loadSchedule();
+  } catch (e) { setStatus("schedStatus", e.message, true); }
+});
+
+/* ── Requirements Calculator ──────────────────────────────── */
+
+qs("btnCalcReq").addEventListener("click", async () => {
+  try {
+    const orderId = val("reqOrder");
+    if (!orderId) { setStatus("reqStatus", "Select an order first.", true); return; }
+    setStatus("reqStatus", "Calculating…");
+    const data = await api(`/orders/${orderId}/requirements`);
+
+    if (data.error) {
+      setStatus("reqStatus", data.error, true);
+      qs("reqSummary").innerHTML = "";
+      qs("reqBody").innerHTML = "";
+      return;
+    }
+
+    setStatus("reqStatus", "Done.");
+    qs("reqSummary").innerHTML = `
+      <strong>Order #${data.order_id}</strong> —
+      Customer: ${data.customer_name} |
+      Qty: ${data.quantity_requested} |
+      Entry team: ${data.entry_team} |
+      Due: ${data.due_date ?? "—"}<br>
+      <strong>Total raw material needed at top of chain: ${data.total_raw_material_needed}</strong>`;
+
+    const body = qs("reqBody");
+    body.innerHTML = "";
+    data.steps.forEach(s => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${s.team_name}</td>
+        <td>${s.sequence_order}</td>
+        <td>${s.gross_output_needed}</td>
+        <td>${s.on_hand_inventory}</td>
+        <td>${s.net_output_needed}</td>
+        <td>${s.input_needed}</td>
+        <td>${s.efficiency}</td>
+        <td>${s.daily_capacity}</td>
+        <td>${s.working_days_required}</td>
+        <td>${s.calendar_days_required}</td>
+        <td>${s.estimated_completion_date}</td>
+        <td>${s.schedule_data_incomplete ? "⚠ Yes" : "No"}</td>`;
+      body.appendChild(tr);
+    });
+  } catch (e) { setStatus("reqStatus", e.message, true); }
+});
+
+/* ── Initial load ─────────────────────────────────────────── */
+refresh("teams");
+</script>
+
+</body>
+</html>
