@@ -5,38 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MRP System</title>
   <style>
-    /* ── Reset ────────────────────────────────────────────────── */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      background: #f5f5f5;
-      color: #222;
+      background: #121212;
+      color: #e0e0e0;
       padding: 1rem;
     }
 
-    h1 { margin-bottom: .75rem; }
-    h2 { margin-bottom: .5rem; }
+    h1 { margin-bottom: .75rem; color: #ffffff; }
+    h2 { margin-bottom: .5rem; color: #ffffff; }
 
     /* ── Tabs ─────────────────────────────────────────────────── */
     .tab-bar {
       display: flex;
       gap: 2px;
       margin-bottom: 1rem;
-      border-bottom: 2px solid #ccc;
+      border-bottom: 2px solid #333;
     }
     .tab-bar button {
       padding: .5rem 1rem;
-      border: 1px solid #ccc;
+      border: 1px solid #333;
       border-bottom: none;
-      background: #e8e8e8;
+      background: #1e1e1e;
+      color: #aaa;
       cursor: pointer;
       font-size: .9rem;
+      border-radius: 4px 4px 0 0;
     }
     .tab-bar button.active {
-      background: #fff;
+      background: #242424;
+      color: #fff;
       font-weight: bold;
-      border-color: #999;
+      border-color: #555;
     }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
@@ -46,13 +48,16 @@
       border-collapse: collapse;
       width: 100%;
       margin-bottom: 1rem;
+      background: #1a1a1a;
     }
     th, td {
-      border: 1px solid #aaa;
+      border: 1px solid #333;
       padding: .35rem .5rem;
       text-align: left;
+      color: #ddd;
     }
-    th { background: #ddd; }
+    th { background: #262626; color: #fff; }
+    tr:hover td { background: #222; }
 
     /* ── Forms ────────────────────────────────────────────────── */
     .form-row {
@@ -61,32 +66,61 @@
       gap: .75rem;
       margin-bottom: .75rem;
       align-items: flex-end;
+      background: #1a1a1a;
+      padding: .75rem;
+      border-radius: 6px;
+      border: 1px solid #2a2a2a;
     }
     .form-row label {
       display: flex;
       flex-direction: column;
       font-size: .85rem;
+      color: #aaa;
     }
     .form-row input,
     .form-row select {
       padding: .3rem .4rem;
       font-size: .9rem;
+      background: #242424;
+      color: #eee;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+    }
+    .form-row input:focus,
+    .form-row select:focus {
+      outline: none;
+      border-color: #5a8fd6;
     }
     button.action {
       padding: .4rem .9rem;
       cursor: pointer;
+      background: #2f6fdb;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: .9rem;
     }
+    button.action:hover { background: #3d7ce8; }
 
     /* ── Status ───────────────────────────────────────────────── */
     .status {
       margin-top: .5rem;
       font-style: italic;
-      color: #555;
+      color: #888;
     }
-    .status.error { color: crimson; }
+    .status.error { color: #e06c6c; }
 
-    /* ── Requirements result ──────────────────────────────────── */
-    #reqSummary { margin-bottom: .75rem; }
+    /* ── Requirements / schedule result ──────────────────────── */
+    #reqSummary, #schedSummary {
+      margin-bottom: .75rem;
+      background: #1a1a1a;
+      padding: .75rem;
+      border-radius: 6px;
+      border: 1px solid #2a2a2a;
+      color: #ddd;
+    }
+    .highlight { color: #6fd66f; font-weight: bold; }
+    .warn { color: #e0b96c; }
   </style>
 </head>
 <body>
@@ -96,14 +130,12 @@
 <div class="tab-bar" id="tabBar">
   <button class="active" data-tab="teams">Teams</button>
   <button data-tab="orders">Orders</button>
-  <button data-tab="inventory">Inventory</button>
   <button data-tab="schedule">Weekly Schedule</button>
   <button data-tab="requirements">Requirements Calculator</button>
+  <button data-tab="scheduler">Order Scheduler</button>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     TAB 1 — TEAMS
-     ═══════════════════════════════════════════════════════════ -->
+<!-- TEAMS -->
 <div class="tab-panel active" id="tab-teams">
   <h2>Teams</h2>
 
@@ -112,12 +144,6 @@
     <label>Sequence     <input id="teamSeq" type="number" min="1" /></label>
     <label>Capacity/day <input id="teamCap" type="number" step="0.01" /></label>
     <label>Efficiency   <input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></label>
-    <label>Sells direct
-      <select id="teamSells">
-        <option value="false">No</option>
-        <option value="true">Yes</option>
-      </select>
-    </label>
     <button class="action" id="btnCreateTeam">Create</button>
   </div>
   <div class="status" id="teamStatus"></div>
@@ -126,16 +152,14 @@
     <thead>
       <tr>
         <th>ID</th><th>Name</th><th>Sequence</th>
-        <th>Capacity</th><th>Efficiency</th><th>Sells Direct</th>
+        <th>Capacity</th><th>Efficiency</th>
       </tr>
     </thead>
     <tbody id="teamsBody"></tbody>
   </table>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     TAB 2 — ORDERS
-     ═══════════════════════════════════════════════════════════ -->
+<!-- ORDERS -->
 <div class="tab-panel" id="tab-orders">
   <h2>Orders</h2>
 
@@ -146,7 +170,7 @@
       <select id="orderTeam"></select>
     </label>
     <label>Order date  <input id="orderDate" type="date" /></label>
-    <label>Due date    <input id="orderDue"  type="date" /></label>
+    <label>Requested due date <input id="orderDue" type="date" /></label>
     <button class="action" id="btnCreateOrder">Create</button>
   </div>
   <div class="status" id="orderStatus"></div>
@@ -155,39 +179,14 @@
     <thead>
       <tr>
         <th>ID</th><th>Customer</th><th>Qty</th>
-        <th>Entry Team ID</th><th>Order Date</th><th>Due Date</th>
+        <th>Entry Team ID</th><th>Order Date</th><th>Requested Due Date</th>
       </tr>
     </thead>
     <tbody id="ordersBody"></tbody>
   </table>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     TAB 3 — INVENTORY
-     ═══════════════════════════════════════════════════════════ -->
-<div class="tab-panel" id="tab-inventory">
-  <h2>Inventory</h2>
-
-  <div class="form-row">
-    <label>Team
-      <select id="invTeam"></select>
-    </label>
-    <label>Qty on hand <input id="invQty" type="number" step="0.01" /></label>
-    <button class="action" id="btnSetInv">Set</button>
-  </div>
-  <div class="status" id="invStatus"></div>
-
-  <table>
-    <thead>
-      <tr><th>ID</th><th>Team ID</th><th>Qty On Hand</th></tr>
-    </thead>
-    <tbody id="invBody"></tbody>
-  </table>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════
-     TAB 4 — WEEKLY SCHEDULE
-     ═══════════════════════════════════════════════════════════ -->
+<!-- WEEKLY SCHEDULE -->
 <div class="tab-panel" id="tab-schedule">
   <h2>Weekly Schedule</h2>
 
@@ -224,11 +223,10 @@
   </table>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     TAB 5 — REQUIREMENTS CALCULATOR
-     ═══════════════════════════════════════════════════════════ -->
+<!-- REQUIREMENTS CALCULATOR -->
 <div class="tab-panel" id="tab-requirements">
   <h2>Requirements Calculator</h2>
+  <p style="color:#888; margin-bottom:.5rem;">Computes material needed per team (no scheduling/capacity contention).</p>
 
   <div class="form-row">
     <label>Order
@@ -244,8 +242,8 @@
     <thead>
       <tr>
         <th>Team</th><th>Seq</th>
-        <th>Gross Needed</th><th>On Hand</th><th>Net Needed</th>
-        <th>Input Needed</th><th>Efficiency</th><th>Capacity/day</th>
+        <th>Output Needed</th><th>Input Needed</th>
+        <th>Efficiency</th><th>Capacity/day</th>
         <th>Working Days</th><th>Calendar Days</th>
         <th>Est. Completion</th><th>Schedule Incomplete?</th>
       </tr>
@@ -254,13 +252,38 @@
   </table>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     JAVASCRIPT
-     ═══════════════════════════════════════════════════════════ -->
+<!-- ORDER SCHEDULER -->
+<div class="tab-panel" id="tab-scheduler">
+  <h2>Order Scheduler</h2>
+  <p style="color:#888; margin-bottom:.5rem;">
+    Runs the requirements calculation AND allocates real capacity across the
+    chain, accounting for whatever's already been scheduled for other orders.
+    Run orders in order_date sequence to preserve FIFO.
+  </p>
+
+  <div class="form-row">
+    <label>Order
+      <select id="schedOrder"></select>
+    </label>
+    <button class="action" id="btnSchedule">Schedule</button>
+  </div>
+  <div class="status" id="schedulerStatus"></div>
+
+  <div id="schedSummary"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Team</th><th>Start Date</th><th>End Date</th>
+        <th>Calendar Days</th><th>Fully Scheduled?</th><th>Schedule Incomplete?</th>
+      </tr>
+    </thead>
+    <tbody id="schedResultBody"></tbody>
+  </table>
+</div>
+
 <script>
 const API = "http://localhost:8000";
-
-/* ── Helpers ──────────────────────────────────────────────── */
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);
@@ -282,8 +305,6 @@ function setStatus(id, msg, isError = false) {
 
 const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
-/* ── Tab switching ────────────────────────────────────────── */
-
 document.querySelectorAll("#tabBar button").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("#tabBar button").forEach(b => b.classList.remove("active"));
@@ -294,15 +315,13 @@ document.querySelectorAll("#tabBar button").forEach(btn => {
   });
 });
 
-/* ── Refresh functions ────────────────────────────────────── */
-
 async function refresh(tab) {
   try {
     if (tab === "teams")        await loadTeams();
     if (tab === "orders")     { await populateTeamDropdown("orderTeam"); await loadOrders(); }
-    if (tab === "inventory")  { await populateTeamDropdown("invTeam");   await loadInventory(); }
     if (tab === "schedule")   { await populateTeamDropdown("schedTeam"); await loadSchedule(); }
-    if (tab === "requirements") { await populateOrderDropdown(); }
+    if (tab === "requirements") { await populateOrderDropdown("reqOrder"); }
+    if (tab === "scheduler")    { await populateOrderDropdown("schedOrder"); }
   } catch (e) {
     console.error(e);
   }
@@ -320,9 +339,9 @@ async function populateTeamDropdown(selectId) {
   });
 }
 
-async function populateOrderDropdown() {
+async function populateOrderDropdown(selectId) {
   const orders = await api("/orders");
-  const sel = qs("reqOrder");
+  const sel = qs(selectId);
   sel.innerHTML = "";
   orders.forEach(o => {
     const opt = document.createElement("option");
@@ -345,8 +364,7 @@ async function loadTeams() {
       <td>${t.name}</td>
       <td>${t.sequence_order}</td>
       <td>${t.daily_capacity}</td>
-      <td>${t.efficiency}</td>
-      <td>${t.sells_direct ? "Yes" : "No"}</td>`;
+      <td>${t.efficiency}</td>`;
     body.appendChild(tr);
   });
 }
@@ -358,7 +376,6 @@ qs("btnCreateTeam").addEventListener("click", async () => {
       sequence_order: val("teamSeq"),
       daily_capacity: val("teamCap"),
       efficiency:     val("teamEff"),
-      sells_direct:   val("teamSells"),
     });
     await api("/teams?" + params, { method: "POST" });
     setStatus("teamStatus", "Team created.");
@@ -399,34 +416,6 @@ qs("btnCreateOrder").addEventListener("click", async () => {
     setStatus("orderStatus", "Order created.");
     await loadOrders();
   } catch (e) { setStatus("orderStatus", e.message, true); }
-});
-
-/* ── Inventory ────────────────────────────────────────────── */
-
-async function loadInventory() {
-  const inv = await api("/inventory");
-  const body = qs("invBody");
-  body.innerHTML = "";
-  inv.forEach(i => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${i.id}</td>
-      <td>${i.team_id}</td>
-      <td>${i.quantity_on_hand}</td>`;
-    body.appendChild(tr);
-  });
-}
-
-qs("btnSetInv").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      team_id:         val("invTeam"),
-      quantity_on_hand: val("invQty"),
-    });
-    await api("/inventory?" + params, { method: "POST" });
-    setStatus("invStatus", "Inventory updated.");
-    await loadInventory();
-  } catch (e) { setStatus("invStatus", e.message, true); }
 });
 
 /* ── Weekly Schedule ──────────────────────────────────────── */
@@ -481,8 +470,8 @@ qs("btnCalcReq").addEventListener("click", async () => {
       Customer: ${data.customer_name} |
       Qty: ${data.quantity_requested} |
       Entry team: ${data.entry_team} |
-      Due: ${data.due_date ?? "—"}<br>
-      <strong>Total raw material needed at top of chain: ${data.total_raw_material_needed}</strong>`;
+      Requested due date: ${data.due_date ?? "—"}<br>
+      <span class="highlight">Total raw material needed at top of chain: ${data.total_raw_material_needed}</span>`;
 
     const body = qs("reqBody");
     body.innerHTML = "";
@@ -491,19 +480,61 @@ qs("btnCalcReq").addEventListener("click", async () => {
       tr.innerHTML = `
         <td>${s.team_name}</td>
         <td>${s.sequence_order}</td>
-        <td>${s.gross_output_needed}</td>
-        <td>${s.on_hand_inventory}</td>
-        <td>${s.net_output_needed}</td>
+        <td>${s.output_needed}</td>
         <td>${s.input_needed}</td>
         <td>${s.efficiency}</td>
         <td>${s.daily_capacity}</td>
         <td>${s.working_days_required}</td>
         <td>${s.calendar_days_required}</td>
         <td>${s.estimated_completion_date}</td>
-        <td>${s.schedule_data_incomplete ? "⚠ Yes" : "No"}</td>`;
+        <td>${s.schedule_data_incomplete ? '<span class="warn">⚠ Yes</span>' : "No"}</td>`;
       body.appendChild(tr);
     });
   } catch (e) { setStatus("reqStatus", e.message, true); }
+});
+
+/* ── Order Scheduler ──────────────────────────────────────── */
+
+qs("btnSchedule").addEventListener("click", async () => {
+  try {
+    const orderId = val("schedOrder");
+    if (!orderId) { setStatus("schedulerStatus", "Select an order first.", true); return; }
+    setStatus("schedulerStatus", "Scheduling…");
+    const data = await api(`/orders/${orderId}/schedule`, { method: "POST" });
+
+    if (data.error) {
+      setStatus("schedulerStatus", data.error, true);
+      qs("schedSummary").innerHTML = "";
+      qs("schedResultBody").innerHTML = "";
+      return;
+    }
+
+    setStatus("schedulerStatus", "Done.");
+
+    const onTime = data.requested_due_date &&
+      data.earliest_possible_completion_date <= data.requested_due_date;
+
+    qs("schedSummary").innerHTML = `
+      <strong>Order #${data.order_id}</strong> — Customer: ${data.customer_name} | Qty: ${data.quantity_requested}<br>
+      Requested due date: ${data.requested_due_date ?? "—"}<br>
+      <span class="${data.requested_due_date ? (onTime ? 'highlight' : 'warn') : ''}">
+        Earliest possible completion: ${data.earliest_possible_completion_date}
+      </span>`;
+
+    const body = qs("schedResultBody");
+    body.innerHTML = "";
+    data.schedule.forEach(s => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${s.team_name}</td>
+        <td>${s.start_date}</td>
+        <td>${s.end_date}</td>
+        <td>${s.calendar_days_elapsed}</td>
+        <td>${s.fully_scheduled ? "Yes" : '<span class="warn">No</span>'}</td>
+        <td>${s.schedule_data_incomplete ? '<span class="warn">⚠ Yes</span>' : "No"}</td>`;
+      body.appendChild(tr);
+    });
+  } catch (e) { setStatus("schedulerStatus", e.message, true); }
 });
 
 /* ── Initial load ─────────────────────────────────────────── */

@@ -1,5 +1,7 @@
 """
-Seed the MRP system with realistic test data via the running HTTP API.
+Seed the MRP system with test data via the running HTTP API, including
+enough orders on the same team to actually exercise capacity contention
+and FIFO scheduling.
 
 Usage:
     1. Start the backend:  uvicorn main:app --reload
@@ -11,13 +13,10 @@ from datetime import date, timedelta
 
 BASE = "http://localhost:8000"
 
-# ── Counters ──────────────────────────────────────────────────────────────────
-
-counts = {"teams": 0, "schedule": 0, "inventory": 0, "orders": 0}
+counts = {"teams": 0, "schedule": 0, "inventory": 0, "orders": 0, "scheduled": 0}
 
 
 def post(path, params, label):
-    """POST to the API with query params. Returns the JSON response or None."""
     try:
         r = requests.post(f"{BASE}{path}", params=params)
         r.raise_for_status()
@@ -25,39 +24,43 @@ def post(path, params, label):
         print(f"  {label}: OK")
         return data
     except Exception as e:
-        status = getattr(e, "response", None)
-        if status is not None:
-            print(f"  {label}: FAILED {status.status_code} — {status.text}")
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            print(f"  {label}: FAILED {resp.status_code} — {resp.text}")
         else:
             print(f"  {label}: FAILED — {e}")
         return None
 
 
-# ── 1. Teams ──────────────────────────────────────────────────────────────────
+# -- 1. Teams --
 
-TEAMS_EXISTING = {
-    "Melting": 1,
-    "Casting": 2,
-    "Hot Rolling": 3,
-    "Finishing": 4,
-}
+TEAMS = [
+    {"name": "Melting",     "sequence_order": 1, "daily_capacity": 1200, "efficiency": 0.97},
+    {"name": "Casting",     "sequence_order": 2, "daily_capacity": 1150, "efficiency": 0.95},
+    {"name": "Hot Rolling", "sequence_order": 3, "daily_capacity": 1100, "efficiency": 0.96},
+    {"name": "Finishing",   "sequence_order": 4, "daily_capacity": 300,  "efficiency": 0.98},
+    # Finishing capacity deliberately kept LOW (300/day) so a handful of
+    # orders is enough to create real contention/backlog to observe.
+]
 
-print("Using existing teams …")
-team_ids = TEAMS_EXISTING
-for name, tid in team_ids.items():
-    print(f"  {name} (id={tid})")
-counts["teams"] = len(team_ids)
+print("Creating teams ...")
+team_ids = {}
+for t in TEAMS:
+    data = post("/teams", t, f"Created team: {t['name']}")
+    if data:
+        team_ids[t["name"]] = data["id"]
+        counts["teams"] += 1
 
 print()
 
-# ── 2. Weekly Schedule ───────────────────────────────────────────────────────
+# -- 2. Weekly Schedule (Mon-Fri working, Sat-Sun off) --
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-print("Setting weekly schedules …")
+print("Setting weekly schedules ...")
 for name, tid in team_ids.items():
     for day in range(7):
-        working = day <= 4  # Mon–Fri
+        working = day <= 4
         data = post(
             "/team-weekly-schedule",
             {"team_id": tid, "day_of_week": day, "is_working_day": working},
@@ -68,71 +71,74 @@ for name, tid in team_ids.items():
 
 print()
 
-# ── 3. Inventory ──────────────────────────────────────────────────────────────
+# -- 3. Inventory --
 
-INVENTORY = {
-    "Melting":     0,
-    "Casting":     200,
-    "Hot Rolling": 0,
-    "Finishing":   50,
-}
+INVENTORY = {"Melting": 0, "Casting": 200, "Hot Rolling": 0, "Finishing": 50}
 
-print("Setting inventory …")
+print("Setting inventory ...")
 for name, qty in INVENTORY.items():
     tid = team_ids.get(name)
     if tid is None:
-        print(f"  Skipping {name} (team not created)")
         continue
-    data = post(
-        "/inventory",
-        {"team_id": tid, "quantity_on_hand": qty},
-        f"{name}: {qty} on hand",
-    )
+    data = post("/inventory", {"team_id": tid, "quantity_on_hand": qty}, f"{name}: {qty} on hand")
     if data:
         counts["inventory"] += 1
 
 print()
 
-# ── 4. Orders ─────────────────────────────────────────────────────────────────
+# -- 4. Orders: enough to create real contention at Finishing --
+# Finishing capacity is 300/day. Each order below requests 250 units
+# entering at Finishing, so every order eats most of a day's capacity --
+# with several orders on the same order_date, later ones should visibly
+# get pushed to later dates.
 
 today = date.today()
 
 ORDERS = [
-    {
-        "customer_name":     "Acme Construction",
-        "quantity_requested": 1000,
-        "entry_team_id":     team_ids.get("Finishing"),
-        "order_date":        today.isoformat(),
-        "due_date":          (today + timedelta(days=21)).isoformat(),
-    },
-    {
-        "customer_name":     "Bridgeworks Inc",
-        "quantity_requested": 500,
-        "entry_team_id":     team_ids.get("Hot Rolling"),
-        "order_date":        today.isoformat(),
-        "due_date":          (today + timedelta(days=14)).isoformat(),
-    },
+    {"customer_name": f"Customer {i+1}", "quantity_requested": 250,
+     "entry_team_id": team_ids.get("Finishing"),
+     "order_date": today.isoformat(),
+     "due_date": (today + timedelta(days=14)).isoformat()}
+    for i in range(8)  # 8 same-day orders competing for 300/day capacity
 ]
 
-print("Creating orders …")
+print("Creating orders ...")
+order_ids = []
 for o in ORDERS:
-    if o["entry_team_id"] is None:
-        print(f"  Skipping order for {o['customer_name']} (entry team not created)")
-        continue
-    data = post(
-        "/orders",
-        o,
-        f"Order for {o['customer_name']} (qty {o['quantity_requested']})",
-    )
+    data = post("/orders", o, f"Order for {o['customer_name']} (qty {o['quantity_requested']})")
     if data:
+        order_ids.append(data["id"])
         counts["orders"] += 1
 
 print()
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# -- 5. Schedule each order in creation sequence (FIFO) --
+
+print("Scheduling orders (FIFO by creation order) ...")
+for oid in order_ids:
+    try:
+        r = requests.post(f"{BASE}/orders/{oid}/schedule")
+        r.raise_for_status()
+        result = r.json()
+        finishing_step = next(
+            (s for s in result["schedule"] if s["team_name"] == "Finishing"), None
+        )
+        if finishing_step:
+            print(f"  Order {oid}: Finishing scheduled {finishing_step['start_date']} -> {finishing_step['end_date']}")
+        counts["scheduled"] += 1
+    except Exception as e:
+        print(f"  Order {oid}: FAILED -- {e}")
+
+print()
+
+# -- Summary --
 
 print("--- Seed complete ---")
-print(f"Teams:                  {counts['teams']} created")
+print(f"Teams:                   {counts['teams']} created")
 print(f"Weekly schedule entries: {counts['schedule']} created")
-print(f"Inventory rows:         {counts['inventory']} created")
-print(f"Orders:                 {counts['orders']} created")
+print(f"Inventory rows:          {counts['inventory']} created")
+print(f"Orders:                  {counts['orders']} created")
+print(f"Orders scheduled:        {counts['scheduled']}")
+print()
+print("Check GET /teams/{id}/capacity-allocations for the Finishing team")
+print("to see the full day-by-day breakdown of how orders queued up.")
