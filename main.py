@@ -116,6 +116,55 @@ def list_weekly_schedule(db: Session = Depends(get_db)):
     return db.query(models.TeamWeeklySchedule).all()
 
 
+@app.post("/team-schedule-exceptions")
+def set_schedule_exception(
+    team_id: int,
+    date: date,
+    is_working_day: bool,
+    reason: str = None,
+    db: Session = Depends(get_db),
+):
+    existing = db.query(models.TeamScheduleException).filter(
+        models.TeamScheduleException.team_id == team_id,
+        models.TeamScheduleException.date == date,
+    ).first()
+    if existing:
+        existing.is_working_day = is_working_day
+        existing.reason = reason
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    entry = models.TeamScheduleException(
+        team_id=team_id, date=date, is_working_day=is_working_day, reason=reason
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@app.get("/team-schedule-exceptions")
+def list_schedule_exceptions(db: Session = Depends(get_db)):
+    return (
+        db.query(models.TeamScheduleException)
+        .order_by(models.TeamScheduleException.date)
+        .all()
+    )
+
+
+@app.delete("/team-schedule-exceptions/{exception_id}")
+def delete_schedule_exception(exception_id: int, db: Session = Depends(get_db)):
+    entry = db.query(models.TeamScheduleException).filter(
+        models.TeamScheduleException.id == exception_id
+    ).first()
+    if not entry:
+        return {"error": "Exception not found"}
+    db.delete(entry)
+    db.commit()
+    return {"status": "deleted", "id": exception_id}
+
+
 @app.get("/orders/{order_id}/requirements")
 def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
     result = calculate_material_requirements(order_id, db)

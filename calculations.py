@@ -2,26 +2,23 @@ import math
 from datetime import timedelta
 from sqlalchemy.orm import Session
 import models
+from team_calendar import build_team_calendar
 
 
 def _count_forward_working_days(team_id: int, start_date, days_needed: int, db: Session):
     """
     Starting from start_date, walks forward day by day until `days_needed`
-    working days have been found for this team, using the team's recurring
-    weekly pattern. If no weekly pattern is set for a given weekday, it's
-    assumed to be a working day (permissive default, flagged in output).
+    working days have been found for this team, checking date-specific
+    exceptions first, then the recurring weekly pattern. If neither exists
+    for a given date, it's assumed to be a working day (permissive default,
+    flagged in output).
 
     Returns (end_date, calendar_days_elapsed, used_default_for_any_day)
     """
     if days_needed <= 0:
         return start_date, 0, False
 
-    weekly_rows = (
-        db.query(models.TeamWeeklySchedule)
-        .filter(models.TeamWeeklySchedule.team_id == team_id)
-        .all()
-    )
-    weekly_map = {row.day_of_week: row.is_working_day for row in weekly_rows}
+    calendar = build_team_calendar(team_id, db)
 
     working_days_found = 0
     calendar_days_elapsed = 0
@@ -31,10 +28,8 @@ def _count_forward_working_days(team_id: int, start_date, days_needed: int, db: 
     max_iterations = days_needed * 10 + 365
 
     while working_days_found < days_needed and calendar_days_elapsed < max_iterations:
-        weekday = current_date.weekday()
-        is_working = weekly_map.get(weekday)
-        if is_working is None:
-            is_working = True
+        is_working, was_default = calendar.is_working(current_date)
+        if was_default:
             used_default = True
 
         if is_working:
@@ -119,4 +114,4 @@ def calculate_material_requirements(order_id: int, db: Session):
         "due_date": str(order.due_date) if order.due_date else None,
         "total_raw_material_needed": round(output_needed, 2),
         "steps": results,
-    }
+    }   

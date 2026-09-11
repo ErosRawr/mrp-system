@@ -131,6 +131,7 @@
   <button class="active" data-tab="teams">Teams</button>
   <button data-tab="orders">Orders</button>
   <button data-tab="schedule">Weekly Schedule</button>
+  <button data-tab="exceptions">Schedule Exceptions</button>
   <button data-tab="requirements">Requirements Calculator</button>
   <button data-tab="scheduler">Order Scheduler</button>
 </div>
@@ -220,6 +221,39 @@
       <tr><th>ID</th><th>Team ID</th><th>Day</th><th>Working?</th></tr>
     </thead>
     <tbody id="schedBody"></tbody>
+  </table>
+</div>
+
+<!-- SCHEDULE EXCEPTIONS -->
+<div class="tab-panel" id="tab-exceptions">
+  <h2>Schedule Exceptions</h2>
+  <p style="color:#888; margin-bottom:.5rem;">
+    One-off overrides for a specific date -- always wins over the weekly
+    pattern, in either direction (e.g. force a normally-working day off for
+    maintenance, or force a normally-off day on for a rush shift).
+  </p>
+
+  <div class="form-row">
+    <label>Team
+      <select id="excTeam"></select>
+    </label>
+    <label>Date <input id="excDate" type="date" /></label>
+    <label>Working?
+      <select id="excWorking">
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </label>
+    <label>Reason (optional) <input id="excReason" placeholder="e.g. Maintenance" /></label>
+    <button class="action" id="btnSetExc">Set</button>
+  </div>
+  <div class="status" id="excStatus"></div>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Team ID</th><th>Date</th><th>Working?</th><th>Reason</th><th></th></tr>
+    </thead>
+    <tbody id="excBody"></tbody>
   </table>
 </div>
 
@@ -320,6 +354,7 @@ async function refresh(tab) {
     if (tab === "teams")        await loadTeams();
     if (tab === "orders")     { await populateTeamDropdown("orderTeam"); await loadOrders(); }
     if (tab === "schedule")   { await populateTeamDropdown("schedTeam"); await loadSchedule(); }
+    if (tab === "exceptions") { await populateTeamDropdown("excTeam"); await loadExceptions(); }
     if (tab === "requirements") { await populateOrderDropdown("reqOrder"); }
     if (tab === "scheduler")    { await populateOrderDropdown("schedOrder"); }
   } catch (e) {
@@ -447,6 +482,47 @@ qs("btnSetSched").addEventListener("click", async () => {
     await loadSchedule();
   } catch (e) { setStatus("schedStatus", e.message, true); }
 });
+
+/* ── Schedule Exceptions ──────────────────────────────────── */
+
+async function loadExceptions() {
+  const exceptions = await api("/team-schedule-exceptions");
+  const body = qs("excBody");
+  body.innerHTML = "";
+  exceptions.forEach(x => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${x.id}</td>
+      <td>${x.team_id}</td>
+      <td>${x.date}</td>
+      <td>${x.is_working_day ? "Yes" : "No"}</td>
+      <td>${x.reason ?? "—"}</td>
+      <td><button class="action" onclick="deleteException(${x.id})">Delete</button></td>`;
+    body.appendChild(tr);
+  });
+}
+
+qs("btnSetExc").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      team_id:        val("excTeam"),
+      date:           val("excDate"),
+      is_working_day: val("excWorking"),
+    });
+    const reason = val("excReason");
+    if (reason) params.set("reason", reason);
+    await api("/team-schedule-exceptions?" + params, { method: "POST" });
+    setStatus("excStatus", "Exception saved.");
+    await loadExceptions();
+  } catch (e) { setStatus("excStatus", e.message, true); }
+});
+
+async function deleteException(id) {
+  try {
+    await api(`/team-schedule-exceptions/${id}`, { method: "DELETE" });
+    await loadExceptions();
+  } catch (e) { setStatus("excStatus", e.message, true); }
+}
 
 /* ── Requirements Calculator ──────────────────────────────── */
 

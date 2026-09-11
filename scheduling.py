@@ -16,15 +16,7 @@ import math
 from datetime import timedelta
 from sqlalchemy.orm import Session
 import models
-
-
-def _get_weekly_pattern(team_id: int, db: Session):
-    rows = (
-        db.query(models.TeamWeeklySchedule)
-        .filter(models.TeamWeeklySchedule.team_id == team_id)
-        .all()
-    )
-    return {row.day_of_week: row.is_working_day for row in rows}
+from team_calendar import build_team_calendar
 
 
 def _already_allocated(team_id: int, on_date, db: Session) -> float:
@@ -65,7 +57,7 @@ def schedule_team_capacity(team_id: int, order_id: int, quantity_needed: float,
         return None
 
     daily_capacity = float(team.daily_capacity)
-    weekly_pattern = _get_weekly_pattern(team_id, db)
+    calendar = build_team_calendar(team_id, db)
 
     remaining_needed = quantity_needed
     current_date = start_date
@@ -75,9 +67,8 @@ def schedule_team_capacity(team_id: int, order_id: int, quantity_needed: float,
     max_iterations = 3650  # ~10 years safety cap, avoids infinite loop on bad data
 
     while remaining_needed > 0 and calendar_days_elapsed < max_iterations:
-        is_working = weekly_pattern.get(current_date.weekday())
-        if is_working is None:
-            is_working = True
+        is_working, was_default = calendar.is_working(current_date)
+        if was_default:
             used_default = True
 
         if is_working and daily_capacity > 0:

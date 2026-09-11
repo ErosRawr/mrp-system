@@ -33,6 +33,23 @@ class TeamWeeklySchedule(Base):
     is_working_day = Column(Boolean, nullable=False, default=True)
 
 
+class TeamScheduleException(Base):
+    """
+    One-off override for a specific date, layered on top of the recurring
+    weekly pattern -- e.g. a holiday shutdown on a normally-working weekday,
+    or a Saturday rush shift on a normally-off weekday. is_working_day here
+    always wins over TeamWeeklySchedule for that exact date, in either
+    direction.
+    """
+    __tablename__ = "team_schedule_exception"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    is_working_day = Column(Boolean, nullable=False)
+    reason = Column(String(200), nullable=True)  # e.g. "Christmas", "Maintenance"
+
+
 class Inventory(Base):
     __tablename__ = "inventory"
 
