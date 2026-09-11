@@ -81,6 +81,23 @@ def calculate_material_requirements(order_id: int, db: Session):
         efficiency = float(team.efficiency)
         daily_capacity = float(team.daily_capacity)
 
+        if daily_capacity <= 0:
+            results.append({
+                "team_id": team.id,
+                "team_name": team.name,
+                "sequence_order": team.sequence_order,
+                "output_needed": round(output_needed, 2),
+                "input_needed": None,
+                "efficiency": efficiency,
+                "daily_capacity": daily_capacity,
+                "working_days_required": None,
+                "calendar_days_required": None,
+                "estimated_completion_date": None,
+                "schedule_data_incomplete": False,
+                "error": f"Team '{team.name}' has zero or invalid daily_capacity -- cannot produce any output",
+            })
+            break
+
         input_needed = output_needed / efficiency
         raw_days_required = (
             math.ceil(output_needed / daily_capacity) if daily_capacity > 0 else 0
@@ -114,4 +131,4 @@ def calculate_material_requirements(order_id: int, db: Session):
         "due_date": str(order.due_date) if order.due_date else None,
         "total_raw_material_needed": round(output_needed, 2),
         "steps": results,
-    }   
+    }

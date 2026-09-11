@@ -57,6 +57,18 @@ def schedule_team_capacity(team_id: int, order_id: int, quantity_needed: float,
         return None
 
     daily_capacity = float(team.daily_capacity)
+
+    if daily_capacity <= 0:
+        return {
+            "start_date": str(start_date),
+            "end_date": None,
+            "calendar_days_elapsed": None,
+            "daily_breakdown": [],
+            "schedule_data_incomplete": False,
+            "fully_scheduled": False,
+            "error": f"Team '{team.name}' has zero or invalid daily_capacity -- cannot schedule any quantity",
+        }
+
     calendar = build_team_calendar(team_id, db)
 
     remaining_needed = quantity_needed

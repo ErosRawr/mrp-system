@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import date, timedelta
@@ -41,6 +41,15 @@ def create_team(
     efficiency: float,
     db: Session = Depends(get_db),
 ):
+    if daily_capacity <= 0:
+        raise HTTPException(400, "daily_capacity must be greater than 0 -- a team with no capacity can never produce anything")
+    if not (0 < efficiency <= 1):
+        raise HTTPException(400, "efficiency must be between 0 (exclusive) and 1 (inclusive), e.g. 0.95 for 95%")
+
+    existing = db.query(models.Team).filter(models.Team.sequence_order == sequence_order).first()
+    if existing:
+        raise HTTPException(400, f"sequence_order {sequence_order} is already used by team '{existing.name}'")
+
     team = models.Team(
         name=name,
         sequence_order=sequence_order,
@@ -67,6 +76,16 @@ def create_order(
     due_date: date = None,
     db: Session = Depends(get_db),
 ):
+    if quantity_requested <= 0:
+        raise HTTPException(400, "quantity_requested must be greater than 0")
+
+    entry_team = db.query(models.Team).filter(models.Team.id == entry_team_id).first()
+    if not entry_team:
+        raise HTTPException(400, f"No team exists with id {entry_team_id} -- check GET /teams for valid ids")
+
+    if due_date and due_date < order_date:
+        raise HTTPException(400, "due_date cannot be before order_date")
+
     order = models.Order(
         customer_name=customer_name,
         quantity_requested=quantity_requested,
