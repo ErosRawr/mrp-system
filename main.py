@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import date, timedelta
+from datetime import date
 from calculations import calculate_material_requirements
-from scheduling import schedule_team_capacity
+from planning import run_monthly_planning
 
 import models
 from database import engine, get_db
@@ -12,7 +12,7 @@ models.Base.metadata.create_all(bind=engine)
 
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="MRP System", version="0.1.0")
+app = FastAPI(title="MRP System", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,12 +37,15 @@ def health_check_db(db: Session = Depends(get_db)):
 def create_team(
     name: str,
     sequence_order: int,
-    daily_capacity: float,
+    monthly_capacity: float,
     efficiency: float,
+    weeks_available: int = 4,
     db: Session = Depends(get_db),
 ):
-    if daily_capacity <= 0:
-        raise HTTPException(400, "daily_capacity must be greater than 0 -- a team with no capacity can never produce anything")
+    if monthly_capacity <= 0:
+        raise HTTPException(400, "monthly_capacity must be greater than 0 -- a team with no capacity can never produce anything")
+    if weeks_available <= 0:
+        raise HTTPException(400, "weeks_available must be greater than 0")
     if not (0 < efficiency <= 1):
         raise HTTPException(400, "efficiency must be between 0 (exclusive) and 1 (inclusive), e.g. 0.95 for 95%")
 
@@ -53,7 +56,8 @@ def create_team(
     team = models.Team(
         name=name,
         sequence_order=sequence_order,
-        daily_capacity=daily_capacity,
+        monthly_capacity=monthly_capacity,
+        weeks_available=weeks_available,
         efficiency=efficiency,
     )
     db.add(team)
@@ -64,7 +68,21 @@ def create_team(
 
 @app.get("/teams")
 def list_teams(db: Session = Depends(get_db)):
-    return db.query(models.Team).order_by(models.Team.sequence_order).all()
+    teams = db.query(models.Team).order_by(models.Team.sequence_order).all()
+    # Include the computed weekly_capacity in the response for convenience,
+    # since it's a @property and not a real column.
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "sequence_order": t.sequence_order,
+            "monthly_capacity": float(t.monthly_capacity),
+            "weeks_available": t.weeks_available,
+            "weekly_capacity": t.weekly_capacity,
+            "efficiency": float(t.efficiency),
+        }
+        for t in teams
+    ]
 
 
 @app.post("/orders")
@@ -73,7 +91,9 @@ def create_order(
     quantity_requested: float,
     entry_team_id: int,
     order_date: date,
-    due_date: date = None,
+    requested_delivery_date: date = None,
+    planning_year: int = None,
+    planning_month: int = None,
     db: Session = Depends(get_db),
 ):
     if quantity_requested <= 0:
@@ -83,15 +103,25 @@ def create_order(
     if not entry_team:
         raise HTTPException(400, f"No team exists with id {entry_team_id} -- check GET /teams for valid ids")
 
-    if due_date and due_date < order_date:
-        raise HTTPException(400, "due_date cannot be before order_date")
+    if requested_delivery_date and requested_delivery_date < order_date:
+        raise HTTPException(400, "requested_delivery_date cannot be before order_date")
+
+    # Default the planning period to the order's own month/year unless the
+    # caller explicitly overrides it (e.g. planning next month's orders
+    # ahead of time).
+    if planning_year is None:
+        planning_year = order_date.year
+    if planning_month is None:
+        planning_month = order_date.month
 
     order = models.Order(
         customer_name=customer_name,
         quantity_requested=quantity_requested,
         entry_team_id=entry_team_id,
         order_date=order_date,
-        due_date=due_date,
+        requested_delivery_date=requested_delivery_date,
+        planning_year=planning_year,
+        planning_month=planning_month,
     )
     db.add(order)
     db.commit()
@@ -186,6 +216,11 @@ def delete_schedule_exception(exception_id: int, db: Session = Depends(get_db)):
 
 @app.get("/orders/{order_id}/requirements")
 def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
+    """
+    Pure material calculation -- how much each team needs to produce.
+    No dates, no capacity contention. This runs immediately when an order
+    is registered, independent of the monthly planning run.
+    """
     result = calculate_material_requirements(order_id, db)
     if result is None:
         return {"error": "Order or entry team not found"}
@@ -219,68 +254,27 @@ def list_inventory(db: Session = Depends(get_db)):
     return db.query(models.Inventory).all()
 
 
-@app.post("/orders/{order_id}/schedule")
-def schedule_order(order_id: int, db: Session = Depends(get_db)):
+@app.post("/planning/run")
+def trigger_monthly_planning(year: int, month: int, db: Session = Depends(get_db)):
     """
-    Runs the material requirements calculation, then schedules capacity
-    for each team in the chain -- CHAINED in time. The upstream-most team
-    (e.g. Melting) starts on order_date. Each subsequent (downstream) team
-    can only start once the previous team's output for this order is
-    actually ready, i.e. after the previous team's end_date.
+    The core spec requirement: runs the monthly planning process. Takes
+    every order registered for (year, month), sorts by requested delivery
+    date, and walks each one through the full team chain, consuming each
+    team's weekly capacity so orders queue realistically against each
+    other and against whatever capacity remains.
 
-    Returns the earliest realistic completion date for the order: the
-    end_date of the LAST team in the chain (the entry team).
-
-    FIFO across orders is enforced by scheduling orders in sequence --
-    call this endpoint for orders in order_date / creation order, since
-    each call commits CapacityAllocation rows that all later calls see.
+    Writes calculated_delivery_date back onto each order and commits the
+    underlying CapacityAllocation rows. Safe to re-run for the same month
+    only if you understand it will add NEW allocations on top of any
+    already committed by a prior run for the same orders -- for a clean
+    re-run, allocations for that month's orders should be cleared first
+    (not yet implemented; run once per month per this MVP).
     """
-    requirements = calculate_material_requirements(order_id, db)
-    if requirements is None:
-        return {"error": "Order or entry team not found"}
+    if not (1 <= month <= 12):
+        raise HTTPException(400, "month must be between 1 and 12")
 
-    order = db.query(models.Order).filter(models.Order.id == order_id).first()
-
-    # requirements["steps"] is ordered entry-team-first, upstream-last
-    # (e.g. Finishing, Hot Rolling, Casting, Melting). For time-chaining
-    # we need to walk it in PRODUCTION order instead: Melting first,
-    # Finishing last -- so we reverse it here.
-    steps_in_production_order = list(reversed(requirements["steps"]))
-
-    schedule_results = []
-    next_start_date = order.order_date
-
-    for step in steps_in_production_order:
-        result = schedule_team_capacity(
-            team_id=step["team_id"],
-            order_id=order_id,
-            quantity_needed=step["output_needed"],
-            start_date=next_start_date,
-            db=db,
-            commit=True,
-        )
-        schedule_results.append({
-            "team_id": step["team_id"],
-            "team_name": step["team_name"],
-            **result,
-        })
-
-        # The next (downstream) team can't start until this team's
-        # output is ready -- i.e. the day after this team finishes.
-        end_date_str = result["end_date"]
-        end_date = date.fromisoformat(end_date_str)
-        next_start_date = end_date + timedelta(days=1)
-
-    earliest_completion_date = schedule_results[-1]["end_date"] if schedule_results else None
-
-    return {
-        "order_id": order_id,
-        "customer_name": requirements["customer_name"],
-        "quantity_requested": requirements["quantity_requested"],
-        "requested_due_date": requirements["due_date"],
-        "earliest_possible_completion_date": earliest_completion_date,
-        "schedule": schedule_results,
-    }
+    result = run_monthly_planning(year, month, db)
+    return result
 
 
 @app.get("/teams/{team_id}/capacity-allocations")
@@ -288,6 +282,75 @@ def list_capacity_allocations(team_id: int, db: Session = Depends(get_db)):
     return (
         db.query(models.CapacityAllocation)
         .filter(models.CapacityAllocation.team_id == team_id)
-        .order_by(models.CapacityAllocation.date)
+        .order_by(models.CapacityAllocation.year, models.CapacityAllocation.week_number)
         .all()
     )
+
+
+@app.get("/teams/{team_id}/occupancy")
+def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depends(get_db)):
+    """
+    Returns this team's percentage occupancy for the given month, plus a
+    week-by-week breakdown -- the chart data required by the spec.
+    """
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    # Determine which ISO weeks fall in this calendar month.
+    from calendar import monthrange
+    from datetime import date as date_cls
+
+    first_day = date_cls(year, month, 1)
+    last_day = date_cls(year, month, monthrange(year, month)[1])
+
+    weeks_in_month = sorted(set(
+        first_day.isocalendar()[1] if d == first_day else d.isocalendar()[1]
+        for d in [first_day, last_day]
+    ))
+    # Build the actual set of ISO weeks touched by this month, day by day
+    # (handles months that span into adjacent ISO years/weeks at the edges).
+    from datetime import timedelta
+    all_weeks = set()
+    d = first_day
+    while d <= last_day:
+        iso_year, iso_week, _ = d.isocalendar()
+        all_weeks.add((iso_year, iso_week))
+        d += timedelta(days=1)
+
+    weekly_capacity = team.weekly_capacity
+    breakdown = []
+    total_allocated = 0.0
+
+    for iso_year, iso_week in sorted(all_weeks):
+        allocated = (
+            db.query(models.CapacityAllocation)
+            .filter(
+                models.CapacityAllocation.team_id == team_id,
+                models.CapacityAllocation.year == iso_year,
+                models.CapacityAllocation.week_number == iso_week,
+            )
+            .all()
+        )
+        week_total = sum(float(a.quantity_allocated) for a in allocated)
+        total_allocated += week_total
+
+        breakdown.append({
+            "year": iso_year,
+            "week_number": iso_week,
+            "allocated": round(week_total, 2),
+            "capacity": weekly_capacity,
+            "occupancy_pct": round((week_total / weekly_capacity) * 100, 1) if weekly_capacity > 0 else None,
+        })
+
+    total_capacity = weekly_capacity * len(all_weeks)
+    overall_pct = round((total_allocated / total_capacity) * 100, 1) if total_capacity > 0 else None
+
+    return {
+        "team_id": team.id,
+        "team_name": team.name,
+        "year": year,
+        "month": month,
+        "overall_occupancy_pct": overall_pct,
+        "weekly_breakdown": breakdown,
+    }

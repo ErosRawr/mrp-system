@@ -587,14 +587,21 @@ qs("btnSchedule").addEventListener("click", async () => {
 
     setStatus("schedulerStatus", "Done.");
 
-    const onTime = data.requested_due_date &&
-      data.earliest_possible_completion_date <= data.requested_due_date;
+    let statusLabel = "";
+    let statusClass = "";
+    if (data.is_late === true) {
+      statusLabel = " (LATE)";
+      statusClass = "warn";
+    } else if (data.is_late === false) {
+      statusLabel = " (on time)";
+      statusClass = "highlight";
+    }
 
     qs("schedSummary").innerHTML = `
       <strong>Order #${data.order_id}</strong> — Customer: ${data.customer_name} | Qty: ${data.quantity_requested}<br>
       Requested due date: ${data.requested_due_date ?? "—"}<br>
-      <span class="${data.requested_due_date ? (onTime ? 'highlight' : 'warn') : ''}">
-        Earliest possible completion: ${data.earliest_possible_completion_date}
+      <span class="${statusClass}">
+        Earliest possible completion: ${data.earliest_possible_completion_date}${statusLabel}
       </span>`;
 
     const body = qs("schedResultBody");

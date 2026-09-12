@@ -1,7 +1,8 @@
 """
-Seed the MRP system with test data via the running HTTP API, including
-enough orders on the same team to actually exercise capacity contention
-and FIFO scheduling.
+Seed the MRP system with test data via the running HTTP API, using the
+professor's own worked example (4 teams, tonnage figures) plus enough
+same-month orders on the bottleneck team to actually exercise weekly
+capacity contention during the planning run.
 
 Usage:
     1. Start the backend:  uvicorn main:app --reload
@@ -13,7 +14,7 @@ from datetime import date, timedelta
 
 BASE = "http://localhost:8000"
 
-counts = {"teams": 0, "schedule": 0, "inventory": 0, "orders": 0, "scheduled": 0}
+counts = {"teams": 0, "orders": 0}
 
 
 def post(path, params, label):
@@ -26,21 +27,23 @@ def post(path, params, label):
     except Exception as e:
         resp = getattr(e, "response", None)
         if resp is not None:
-            print(f"  {label}: FAILED {resp.status_code} — {resp.text}")
+            print(f"  {label}: FAILED {resp.status_code} -- {resp.text}")
         else:
-            print(f"  {label}: FAILED — {e}")
+            print(f"  {label}: FAILED -- {e}")
         return None
 
 
-# -- 1. Teams --
+# -- 1. Teams -- matches the professor's worked example exactly, except
+# Equipo 4's monthly_capacity is deliberately lowered so a handful of
+# same-month orders create visible weekly contention during planning.
 
 TEAMS = [
-    {"name": "Melting",     "sequence_order": 1, "daily_capacity": 1200, "efficiency": 0.97},
-    {"name": "Casting",     "sequence_order": 2, "daily_capacity": 1150, "efficiency": 0.95},
-    {"name": "Hot Rolling", "sequence_order": 3, "daily_capacity": 1100, "efficiency": 0.96},
-    {"name": "Finishing",   "sequence_order": 4, "daily_capacity": 300,  "efficiency": 0.98},
-    # Finishing capacity deliberately kept LOW (300/day) so a handful of
-    # orders is enough to create real contention/backlog to observe.
+    {"name": "Equipo 1", "sequence_order": 1, "monthly_capacity": 100000, "efficiency": 0.98},
+    {"name": "Equipo 2", "sequence_order": 2, "monthly_capacity": 80000,  "efficiency": 0.95},
+    {"name": "Equipo 3", "sequence_order": 3, "monthly_capacity": 80000,  "efficiency": 0.92},
+    {"name": "Equipo 4", "sequence_order": 4, "monthly_capacity": 4000,   "efficiency": 0.96},
+    # Equipo 4: 4000 tons/month over 4 weeks = 1000 tons/week bottleneck,
+    # deliberately tight so several ~1200-ton orders visibly queue up.
 ]
 
 print("Creating teams ...")
@@ -53,92 +56,68 @@ for t in TEAMS:
 
 print()
 
-# -- 2. Weekly Schedule (Mon-Fri working, Sat-Sun off) --
+# -- 2. Orders -- several orders in the same planning month, entering at
+# Equipo 4 (the bottleneck), with staggered requested delivery dates so
+# the planning run's priority-sorting behavior is visible: orders with
+# earlier requested dates should get earlier weeks of capacity.
 
-DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-print("Setting weekly schedules ...")
-for name, tid in team_ids.items():
-    for day in range(7):
-        working = day <= 4
-        data = post(
-            "/team-weekly-schedule",
-            {"team_id": tid, "day_of_week": day, "is_working_day": working},
-            f"{name} {DAY_NAMES[day]}={'work' if working else 'off'}",
-        )
-        if data:
-            counts["schedule"] += 1
-
-print()
-
-# -- 3. Inventory --
-
-INVENTORY = {"Melting": 0, "Casting": 200, "Hot Rolling": 0, "Finishing": 50}
-
-print("Setting inventory ...")
-for name, qty in INVENTORY.items():
-    tid = team_ids.get(name)
-    if tid is None:
-        continue
-    data = post("/inventory", {"team_id": tid, "quantity_on_hand": qty}, f"{name}: {qty} on hand")
-    if data:
-        counts["inventory"] += 1
-
-print()
-
-# -- 4. Orders: enough to create real contention at Finishing --
-# Finishing capacity is 300/day. Each order below requests 250 units
-# entering at Finishing, so every order eats most of a day's capacity --
-# with several orders on the same order_date, later ones should visibly
-# get pushed to later dates.
-
-today = date.today()
+PLANNING_YEAR = 2026
+PLANNING_MONTH = 9
+order_date = date(PLANNING_YEAR, PLANNING_MONTH, 1)
 
 ORDERS = [
-    {"customer_name": f"Customer {i+1}", "quantity_requested": 250,
-     "entry_team_id": team_ids.get("Finishing"),
-     "order_date": today.isoformat(),
-     "due_date": (today + timedelta(days=14)).isoformat()}
-    for i in range(8)  # 8 same-day orders competing for 300/day capacity
+    {"customer_name": "Cliente C (requests late)",   "quantity_requested": 1200,
+     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 25).isoformat()},
+    {"customer_name": "Cliente A (requests early)",  "quantity_requested": 1200,
+     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 10).isoformat()},
+    {"customer_name": "Cliente B (requests middle)", "quantity_requested": 1200,
+     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 18).isoformat()},
 ]
 
 print("Creating orders ...")
 order_ids = []
 for o in ORDERS:
-    data = post("/orders", o, f"Order for {o['customer_name']} (qty {o['quantity_requested']})")
+    params = {
+        "customer_name": o["customer_name"],
+        "quantity_requested": o["quantity_requested"],
+        "entry_team_id": team_ids.get("Equipo 4"),
+        "order_date": order_date.isoformat(),
+        "requested_delivery_date": o["requested_delivery_date"],
+        "planning_year": PLANNING_YEAR,
+        "planning_month": PLANNING_MONTH,
+    }
+    data = post("/orders", params, f"Order for {o['customer_name']} (qty {o['quantity_requested']})")
     if data:
         order_ids.append(data["id"])
         counts["orders"] += 1
 
 print()
 
-# -- 5. Schedule each order in creation sequence (FIFO) --
+# -- 3. Run the monthly planning batch --
 
-print("Scheduling orders (FIFO by creation order) ...")
-for oid in order_ids:
-    try:
-        r = requests.post(f"{BASE}/orders/{oid}/schedule")
-        r.raise_for_status()
-        result = r.json()
-        finishing_step = next(
-            (s for s in result["schedule"] if s["team_name"] == "Finishing"), None
-        )
-        if finishing_step:
-            print(f"  Order {oid}: Finishing scheduled {finishing_step['start_date']} -> {finishing_step['end_date']}")
-        counts["scheduled"] += 1
-    except Exception as e:
-        print(f"  Order {oid}: FAILED -- {e}")
+print(f"Running monthly planning for {PLANNING_YEAR}-{PLANNING_MONTH:02d} ...")
+try:
+    r = requests.post(f"{BASE}/planning/run", params={"year": PLANNING_YEAR, "month": PLANNING_MONTH})
+    r.raise_for_status()
+    result = r.json()
+    print(f"  Orders planned: {result['orders_planned']}")
+    for entry in result["results"]:
+        if "error" in entry:
+            print(f"  Order {entry['order_id']} ({entry.get('customer_name')}): ERROR -- {entry['error']}")
+        else:
+            late_flag = " [LATE]" if entry["is_late"] else ""
+            print(f"  {entry['customer_name']}: requested={entry['requested_delivery_date']}, "
+                  f"calculated={entry['calculated_delivery_date']}{late_flag}")
+except Exception as e:
+    print(f"  Planning run FAILED -- {e}")
 
 print()
 
 # -- Summary --
 
 print("--- Seed complete ---")
-print(f"Teams:                   {counts['teams']} created")
-print(f"Weekly schedule entries: {counts['schedule']} created")
-print(f"Inventory rows:          {counts['inventory']} created")
-print(f"Orders:                  {counts['orders']} created")
-print(f"Orders scheduled:        {counts['scheduled']}")
+print(f"Teams:  {counts['teams']} created")
+print(f"Orders: {counts['orders']} created")
 print()
-print("Check GET /teams/{id}/capacity-allocations for the Finishing team")
-print("to see the full day-by-day breakdown of how orders queued up.")
+print("Check GET /teams/{id}/capacity-allocations to see the weekly ledger,")
+print(f"or GET /teams/{{id}}/occupancy?year={PLANNING_YEAR}&month={PLANNING_MONTH} for the occupancy chart data.")
