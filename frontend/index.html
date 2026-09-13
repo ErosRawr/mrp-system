@@ -17,12 +17,12 @@
     h1 { margin-bottom: .75rem; color: #ffffff; }
     h2 { margin-bottom: .5rem; color: #ffffff; }
 
-    /* ── Tabs ─────────────────────────────────────────────────── */
     .tab-bar {
       display: flex;
       gap: 2px;
       margin-bottom: 1rem;
       border-bottom: 2px solid #333;
+      flex-wrap: wrap;
     }
     .tab-bar button {
       padding: .5rem 1rem;
@@ -43,7 +43,6 @@
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ── Tables ───────────────────────────────────────────────── */
     table {
       border-collapse: collapse;
       width: 100%;
@@ -59,7 +58,6 @@
     th { background: #262626; color: #fff; }
     tr:hover td { background: #222; }
 
-    /* ── Forms ────────────────────────────────────────────────── */
     .form-row {
       display: flex;
       flex-wrap: wrap;
@@ -102,7 +100,6 @@
     }
     button.action:hover { background: #3d7ce8; }
 
-    /* ── Status ───────────────────────────────────────────────── */
     .status {
       margin-top: .5rem;
       font-style: italic;
@@ -110,8 +107,7 @@
     }
     .status.error { color: #e06c6c; }
 
-    /* ── Requirements / schedule result ──────────────────────── */
-    #reqSummary, #schedSummary {
+    #reqSummary, #planSummary {
       margin-bottom: .75rem;
       background: #1a1a1a;
       padding: .75rem;
@@ -121,6 +117,35 @@
     }
     .highlight { color: #6fd66f; font-weight: bold; }
     .warn { color: #e0b96c; }
+
+    /* ── Occupancy bars ───────────────────────────────────────── */
+    .occ-bar-row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .4rem;
+    }
+    .occ-label { width: 90px; font-size: .85rem; color: #aaa; }
+    .occ-track {
+      flex: 1;
+      background: #262626;
+      border-radius: 4px;
+      height: 20px;
+      overflow: hidden;
+      border: 1px solid #333;
+    }
+    .occ-fill {
+      height: 100%;
+      background: #2f6fdb;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 6px;
+      font-size: .75rem;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .occ-fill.over { background: #d9534f; }
   </style>
 </head>
 <body>
@@ -133,7 +158,8 @@
   <button data-tab="schedule">Weekly Schedule</button>
   <button data-tab="exceptions">Schedule Exceptions</button>
   <button data-tab="requirements">Requirements Calculator</button>
-  <button data-tab="scheduler">Order Scheduler</button>
+  <button data-tab="planning">Monthly Planning</button>
+  <button data-tab="occupancy">Occupancy</button>
 </div>
 
 <!-- TEAMS -->
@@ -141,10 +167,11 @@
   <h2>Teams</h2>
 
   <div class="form-row">
-    <label>Name         <input id="teamName" /></label>
-    <label>Sequence     <input id="teamSeq" type="number" min="1" /></label>
-    <label>Capacity/day <input id="teamCap" type="number" step="0.01" /></label>
-    <label>Efficiency   <input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></label>
+    <label>Name              <input id="teamName" /></label>
+    <label>Sequence          <input id="teamSeq" type="number" min="1" /></label>
+    <label>Monthly capacity  <input id="teamCap" type="number" step="0.01" /></label>
+    <label>Weeks available   <input id="teamWeeks" type="number" min="1" value="4" /></label>
+    <label>Efficiency        <input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></label>
     <button class="action" id="btnCreateTeam">Create</button>
   </div>
   <div class="status" id="teamStatus"></div>
@@ -153,7 +180,7 @@
     <thead>
       <tr>
         <th>ID</th><th>Name</th><th>Sequence</th>
-        <th>Capacity</th><th>Efficiency</th>
+        <th>Monthly Capacity</th><th>Weeks Available</th><th>Weekly Capacity</th><th>Efficiency</th>
       </tr>
     </thead>
     <tbody id="teamsBody"></tbody>
@@ -171,7 +198,7 @@
       <select id="orderTeam"></select>
     </label>
     <label>Order date  <input id="orderDate" type="date" /></label>
-    <label>Requested due date <input id="orderDue" type="date" /></label>
+    <label>Requested delivery date <input id="orderReqDate" type="date" /></label>
     <button class="action" id="btnCreateOrder">Create</button>
   </div>
   <div class="status" id="orderStatus"></div>
@@ -180,7 +207,8 @@
     <thead>
       <tr>
         <th>ID</th><th>Customer</th><th>Qty</th>
-        <th>Entry Team ID</th><th>Order Date</th><th>Requested Due Date</th>
+        <th>Entry Team ID</th><th>Order Date</th><th>Requested Delivery</th>
+        <th>Planning Period</th><th>Calculated Delivery</th>
       </tr>
     </thead>
     <tbody id="ordersBody"></tbody>
@@ -229,8 +257,7 @@
   <h2>Schedule Exceptions</h2>
   <p style="color:#888; margin-bottom:.5rem;">
     One-off overrides for a specific date -- always wins over the weekly
-    pattern, in either direction (e.g. force a normally-working day off for
-    maintenance, or force a normally-off day on for a rush shift).
+    pattern, in either direction.
   </p>
 
   <div class="form-row">
@@ -260,7 +287,10 @@
 <!-- REQUIREMENTS CALCULATOR -->
 <div class="tab-panel" id="tab-requirements">
   <h2>Requirements Calculator</h2>
-  <p style="color:#888; margin-bottom:.5rem;">Computes material needed per team (no scheduling/capacity contention).</p>
+  <p style="color:#888; margin-bottom:.5rem;">
+    Pure material calculation -- how much each team must produce. No dates
+    or capacity contention (that's the Monthly Planning run).
+  </p>
 
   <div class="form-row">
     <label>Order
@@ -277,43 +307,61 @@
       <tr>
         <th>Team</th><th>Seq</th>
         <th>Output Needed</th><th>Input Needed</th>
-        <th>Efficiency</th><th>Capacity/day</th>
-        <th>Working Days</th><th>Calendar Days</th>
-        <th>Est. Completion</th><th>Schedule Incomplete?</th>
+        <th>Efficiency</th><th>Monthly Capacity</th><th>Weekly Capacity</th>
       </tr>
     </thead>
     <tbody id="reqBody"></tbody>
   </table>
 </div>
 
-<!-- ORDER SCHEDULER -->
-<div class="tab-panel" id="tab-scheduler">
-  <h2>Order Scheduler</h2>
+<!-- MONTHLY PLANNING -->
+<div class="tab-panel" id="tab-planning">
+  <h2>Monthly Planning</h2>
   <p style="color:#888; margin-bottom:.5rem;">
-    Runs the requirements calculation AND allocates real capacity across the
-    chain, accounting for whatever's already been scheduled for other orders.
-    Run orders in order_date sequence to preserve FIFO.
+    Takes every order registered for the given month, sorts by requested
+    delivery date, and allocates weekly capacity across the full team chain
+    -- writing a calculated delivery date back onto each order.
   </p>
 
   <div class="form-row">
-    <label>Order
-      <select id="schedOrder"></select>
-    </label>
-    <button class="action" id="btnSchedule">Schedule</button>
+    <label>Year  <input id="planYear" type="number" value="2026" /></label>
+    <label>Month <input id="planMonth" type="number" min="1" max="12" value="9" /></label>
+    <button class="action" id="btnRunPlanning">Run Planning</button>
   </div>
-  <div class="status" id="schedulerStatus"></div>
+  <div class="status" id="planStatus"></div>
 
-  <div id="schedSummary"></div>
+  <div id="planSummary"></div>
 
   <table>
     <thead>
       <tr>
-        <th>Team</th><th>Start Date</th><th>End Date</th>
-        <th>Calendar Days</th><th>Fully Scheduled?</th><th>Schedule Incomplete?</th>
+        <th>Order</th><th>Customer</th><th>Requested Delivery</th>
+        <th>Calculated Delivery</th><th>Late?</th>
       </tr>
     </thead>
-    <tbody id="schedResultBody"></tbody>
+    <tbody id="planBody"></tbody>
   </table>
+</div>
+
+<!-- OCCUPANCY -->
+<div class="tab-panel" id="tab-occupancy">
+  <h2>Occupancy</h2>
+  <p style="color:#888; margin-bottom:.5rem;">
+    Percentage of weekly capacity allocated per team, for a given month.
+  </p>
+
+  <div class="form-row">
+    <label>Team
+      <select id="occTeam"></select>
+    </label>
+    <label>Year  <input id="occYear" type="number" value="2026" /></label>
+    <label>Month <input id="occMonth" type="number" min="1" max="12" value="9" /></label>
+    <button class="action" id="btnGetOccupancy">View</button>
+  </div>
+  <div class="status" id="occStatus"></div>
+
+  <div id="occSummary"></div>
+  <div id="occChart"></div>
 </div>
 
 <script>
@@ -356,7 +404,7 @@ async function refresh(tab) {
     if (tab === "schedule")   { await populateTeamDropdown("schedTeam"); await loadSchedule(); }
     if (tab === "exceptions") { await populateTeamDropdown("excTeam"); await loadExceptions(); }
     if (tab === "requirements") { await populateOrderDropdown("reqOrder"); }
-    if (tab === "scheduler")    { await populateOrderDropdown("schedOrder"); }
+    if (tab === "occupancy")   { await populateTeamDropdown("occTeam"); }
   } catch (e) {
     console.error(e);
   }
@@ -398,7 +446,9 @@ async function loadTeams() {
       <td>${t.id}</td>
       <td>${t.name}</td>
       <td>${t.sequence_order}</td>
-      <td>${t.daily_capacity}</td>
+      <td>${t.monthly_capacity}</td>
+      <td>${t.weeks_available}</td>
+      <td>${t.weekly_capacity}</td>
       <td>${t.efficiency}</td>`;
     body.appendChild(tr);
   });
@@ -407,10 +457,11 @@ async function loadTeams() {
 qs("btnCreateTeam").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      name:           val("teamName"),
-      sequence_order: val("teamSeq"),
-      daily_capacity: val("teamCap"),
-      efficiency:     val("teamEff"),
+      name:             val("teamName"),
+      sequence_order:   val("teamSeq"),
+      monthly_capacity: val("teamCap"),
+      weeks_available:  val("teamWeeks"),
+      efficiency:       val("teamEff"),
     });
     await api("/teams?" + params, { method: "POST" });
     setStatus("teamStatus", "Team created.");
@@ -432,7 +483,9 @@ async function loadOrders() {
       <td>${o.quantity_requested}</td>
       <td>${o.entry_team_id}</td>
       <td>${o.order_date}</td>
-      <td>${o.due_date ?? "—"}</td>`;
+      <td>${o.requested_delivery_date ?? "—"}</td>
+      <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
+      <td>${o.calculated_delivery_date ?? "—"}</td>`;
     body.appendChild(tr);
   });
 }
@@ -440,13 +493,13 @@ async function loadOrders() {
 qs("btnCreateOrder").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      customer_name:     val("orderCust"),
+      customer_name:      val("orderCust"),
       quantity_requested: val("orderQty"),
-      entry_team_id:     val("orderTeam"),
-      order_date:        val("orderDate"),
+      entry_team_id:      val("orderTeam"),
+      order_date:         val("orderDate"),
     });
-    const due = val("orderDue");
-    if (due) params.set("due_date", due);
+    const reqDate = val("orderReqDate");
+    if (reqDate) params.set("requested_delivery_date", reqDate);
     await api("/orders?" + params, { method: "POST" });
     setStatus("orderStatus", "Order created.");
     await loadOrders();
@@ -473,8 +526,8 @@ async function loadSchedule() {
 qs("btnSetSched").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      team_id:       val("schedTeam"),
-      day_of_week:   val("schedDay"),
+      team_id:        val("schedTeam"),
+      day_of_week:    val("schedDay"),
       is_working_day: val("schedWorking"),
     });
     await api("/team-weekly-schedule?" + params, { method: "POST" });
@@ -546,7 +599,8 @@ qs("btnCalcReq").addEventListener("click", async () => {
       Customer: ${data.customer_name} |
       Qty: ${data.quantity_requested} |
       Entry team: ${data.entry_team} |
-      Requested due date: ${data.due_date ?? "—"}<br>
+      Requested delivery: ${data.requested_delivery_date ?? "—"} |
+      Calculated delivery: ${data.calculated_delivery_date ?? "— (run planning first)"}<br>
       <span class="highlight">Total raw material needed at top of chain: ${data.total_raw_material_needed}</span>`;
 
     const body = qs("reqBody");
@@ -557,67 +611,86 @@ qs("btnCalcReq").addEventListener("click", async () => {
         <td>${s.team_name}</td>
         <td>${s.sequence_order}</td>
         <td>${s.output_needed}</td>
-        <td>${s.input_needed}</td>
+        <td>${s.input_needed ?? "—"}</td>
         <td>${s.efficiency}</td>
-        <td>${s.daily_capacity}</td>
-        <td>${s.working_days_required}</td>
-        <td>${s.calendar_days_required}</td>
-        <td>${s.estimated_completion_date}</td>
-        <td>${s.schedule_data_incomplete ? '<span class="warn">⚠ Yes</span>' : "No"}</td>`;
+        <td>${s.monthly_capacity}</td>
+        <td>${s.weekly_capacity}</td>`;
       body.appendChild(tr);
     });
   } catch (e) { setStatus("reqStatus", e.message, true); }
 });
 
-/* ── Order Scheduler ──────────────────────────────────────── */
+/* ── Monthly Planning ─────────────────────────────────────── */
 
-qs("btnSchedule").addEventListener("click", async () => {
+qs("btnRunPlanning").addEventListener("click", async () => {
   try {
-    const orderId = val("schedOrder");
-    if (!orderId) { setStatus("schedulerStatus", "Select an order first.", true); return; }
-    setStatus("schedulerStatus", "Scheduling…");
-    const data = await api(`/orders/${orderId}/schedule`, { method: "POST" });
+    const year = val("planYear");
+    const month = val("planMonth");
+    setStatus("planStatus", "Running planning…");
+    const data = await api(`/planning/run?year=${year}&month=${month}`, { method: "POST" });
 
-    if (data.error) {
-      setStatus("schedulerStatus", data.error, true);
-      qs("schedSummary").innerHTML = "";
-      qs("schedResultBody").innerHTML = "";
-      return;
-    }
+    setStatus("planStatus", `Done. ${data.orders_planned} order(s) planned.`);
+    qs("planSummary").innerHTML = `
+      <strong>Planning run for ${data.planning_year}-${String(data.planning_month).padStart(2,"0")}</strong><br>
+      Orders planned: ${data.orders_planned}`;
 
-    setStatus("schedulerStatus", "Done.");
-
-    let statusLabel = "";
-    let statusClass = "";
-    if (data.is_late === true) {
-      statusLabel = " (LATE)";
-      statusClass = "warn";
-    } else if (data.is_late === false) {
-      statusLabel = " (on time)";
-      statusClass = "highlight";
-    }
-
-    qs("schedSummary").innerHTML = `
-      <strong>Order #${data.order_id}</strong> — Customer: ${data.customer_name} | Qty: ${data.quantity_requested}<br>
-      Requested due date: ${data.requested_due_date ?? "—"}<br>
-      <span class="${statusClass}">
-        Earliest possible completion: ${data.earliest_possible_completion_date}${statusLabel}
-      </span>`;
-
-    const body = qs("schedResultBody");
+    const body = qs("planBody");
     body.innerHTML = "";
-    data.schedule.forEach(s => {
+    data.results.forEach(r => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${s.team_name}</td>
-        <td>${s.start_date}</td>
-        <td>${s.end_date}</td>
-        <td>${s.calendar_days_elapsed}</td>
-        <td>${s.fully_scheduled ? "Yes" : '<span class="warn">No</span>'}</td>
-        <td>${s.schedule_data_incomplete ? '<span class="warn">⚠ Yes</span>' : "No"}</td>`;
+      if (r.error) {
+        tr.innerHTML = `
+          <td>${r.order_id}</td>
+          <td>${r.customer_name ?? "—"}</td>
+          <td colspan="3" class="warn">${r.error}</td>`;
+      } else {
+        let lateLabel = "—";
+        if (r.is_late === true) lateLabel = '<span class="warn">LATE</span>';
+        else if (r.is_late === false) lateLabel = '<span class="highlight">On time</span>';
+        tr.innerHTML = `
+          <td>${r.order_id}</td>
+          <td>${r.customer_name}</td>
+          <td>${r.requested_delivery_date ?? "—"}</td>
+          <td>${r.calculated_delivery_date}</td>
+          <td>${lateLabel}</td>`;
+      }
       body.appendChild(tr);
     });
-  } catch (e) { setStatus("schedulerStatus", e.message, true); }
+  } catch (e) { setStatus("planStatus", e.message, true); }
+});
+
+/* ── Occupancy ────────────────────────────────────────────── */
+
+qs("btnGetOccupancy").addEventListener("click", async () => {
+  try {
+    const teamId = val("occTeam");
+    const year = val("occYear");
+    const month = val("occMonth");
+    if (!teamId) { setStatus("occStatus", "Select a team first.", true); return; }
+    setStatus("occStatus", "Loading…");
+    const data = await api(`/teams/${teamId}/occupancy?year=${year}&month=${month}`);
+
+    setStatus("occStatus", "Done.");
+    qs("occSummary").innerHTML = `
+      <strong>${data.team_name}</strong> — ${data.year}-${String(data.month).padStart(2,"0")}<br>
+      Overall occupancy: <span class="highlight">${data.overall_occupancy_pct ?? "—"}%</span>`;
+
+    const chart = qs("occChart");
+    chart.innerHTML = "";
+    data.weekly_breakdown.forEach(w => {
+      const pct = w.occupancy_pct ?? 0;
+      const displayPct = Math.min(pct, 100);
+      const overClass = pct > 100 ? "over" : "";
+      const row = document.createElement("div");
+      row.className = "occ-bar-row";
+      row.innerHTML = `
+        <div class="occ-label">Week ${w.week_number}</div>
+        <div class="occ-track">
+          <div class="occ-fill ${overClass}" style="width:${displayPct}%">${pct}%</div>
+        </div>`;
+      chart.appendChild(row);
+    });
+  } catch (e) { setStatus("occStatus", e.message, true); }
 });
 
 /* ── Initial load ─────────────────────────────────────────── */
