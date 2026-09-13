@@ -155,8 +155,7 @@
 <div class="tab-bar" id="tabBar">
   <button class="active" data-tab="teams">Teams</button>
   <button data-tab="orders">Orders</button>
-  <button data-tab="schedule">Weekly Schedule</button>
-  <button data-tab="exceptions">Schedule Exceptions</button>
+  <button data-tab="exceptions">Week Exceptions</button>
   <button data-tab="requirements">Requirements Calculator</button>
   <button data-tab="planning">Monthly Planning</button>
   <button data-tab="occupancy">Occupancy</button>
@@ -215,70 +214,40 @@
   </table>
 </div>
 
-<!-- WEEKLY SCHEDULE -->
-<div class="tab-panel" id="tab-schedule">
-  <h2>Weekly Schedule</h2>
-
-  <div class="form-row">
-    <label>Team
-      <select id="schedTeam"></select>
-    </label>
-    <label>Day
-      <select id="schedDay">
-        <option value="0">Monday</option>
-        <option value="1">Tuesday</option>
-        <option value="2">Wednesday</option>
-        <option value="3">Thursday</option>
-        <option value="4">Friday</option>
-        <option value="5">Saturday</option>
-        <option value="6">Sunday</option>
-      </select>
-    </label>
-    <label>Working?
-      <select id="schedWorking">
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
-    </label>
-    <button class="action" id="btnSetSched">Set</button>
-  </div>
-  <div class="status" id="schedStatus"></div>
-
-  <table>
-    <thead>
-      <tr><th>ID</th><th>Team ID</th><th>Day</th><th>Working?</th></tr>
-    </thead>
-    <tbody id="schedBody"></tbody>
-  </table>
-</div>
-
-<!-- SCHEDULE EXCEPTIONS -->
+<!-- WEEK EXCEPTIONS -->
 <div class="tab-panel" id="tab-exceptions">
-  <h2>Schedule Exceptions</h2>
+  <h2>Week Exceptions</h2>
   <p style="color:#888; margin-bottom:.5rem;">
-    One-off overrides for a specific date -- always wins over the weekly
-    pattern, in either direction.
+    Reduces a team's capacity for a specific (year, week) -- holidays,
+    maintenance shutdowns, etc. A multiplier of 1.0 is full capacity, 0.0
+    is fully unavailable, 0.8 is e.g. one holiday in a 5-day week.
   </p>
 
   <div class="form-row">
     <label>Team
       <select id="excTeam"></select>
     </label>
-    <label>Date <input id="excDate" type="date" /></label>
-    <label>Working?
-      <select id="excWorking">
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
-    </label>
+    <label>Year <input id="excYear" type="number" value="2026" /></label>
+    <label>Week # <input id="excWeek" type="number" min="1" max="53" /></label>
+    <label>Capacity multiplier <input id="excMultiplier" type="number" step="0.05" min="0" max="1" value="1.0" /></label>
     <label>Reason (optional) <input id="excReason" placeholder="e.g. Maintenance" /></label>
     <button class="action" id="btnSetExc">Set</button>
   </div>
   <div class="status" id="excStatus"></div>
 
+  <div class="form-row">
+    <label>Import holidays for team
+      <select id="holidayTeam"></select>
+    </label>
+    <label>Year <input id="holidayYear" type="number" value="2026" /></label>
+    <label>Working days/week <input id="holidayWorkDays" type="number" min="1" value="5" /></label>
+    <button class="action" id="btnImportHolidays">Import Mexican Holidays</button>
+  </div>
+  <div class="status" id="holidayStatus"></div>
+
   <table>
     <thead>
-      <tr><th>ID</th><th>Team ID</th><th>Date</th><th>Working?</th><th>Reason</th><th></th></tr>
+      <tr><th>ID</th><th>Team ID</th><th>Year</th><th>Week</th><th>Multiplier</th><th>Reason</th><th></th></tr>
     </thead>
     <tbody id="excBody"></tbody>
   </table>
@@ -385,8 +354,6 @@ function setStatus(id, msg, isError = false) {
   el.className = "status" + (isError ? " error" : "");
 }
 
-const DAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-
 document.querySelectorAll("#tabBar button").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("#tabBar button").forEach(b => b.classList.remove("active"));
@@ -401,8 +368,11 @@ async function refresh(tab) {
   try {
     if (tab === "teams")        await loadTeams();
     if (tab === "orders")     { await populateTeamDropdown("orderTeam"); await loadOrders(); }
-    if (tab === "schedule")   { await populateTeamDropdown("schedTeam"); await loadSchedule(); }
-    if (tab === "exceptions") { await populateTeamDropdown("excTeam"); await loadExceptions(); }
+    if (tab === "exceptions") {
+      await populateTeamDropdown("excTeam");
+      await populateTeamDropdown("holidayTeam");
+      await loadExceptions();
+    }
     if (tab === "requirements") { await populateOrderDropdown("reqOrder"); }
     if (tab === "occupancy")   { await populateTeamDropdown("occTeam"); }
   } catch (e) {
@@ -506,40 +476,10 @@ qs("btnCreateOrder").addEventListener("click", async () => {
   } catch (e) { setStatus("orderStatus", e.message, true); }
 });
 
-/* ── Weekly Schedule ──────────────────────────────────────── */
-
-async function loadSchedule() {
-  const sched = await api("/team-weekly-schedule");
-  const body = qs("schedBody");
-  body.innerHTML = "";
-  sched.forEach(s => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${s.id}</td>
-      <td>${s.team_id}</td>
-      <td>${DAY_NAMES[s.day_of_week] ?? s.day_of_week}</td>
-      <td>${s.is_working_day ? "Yes" : "No"}</td>`;
-    body.appendChild(tr);
-  });
-}
-
-qs("btnSetSched").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      team_id:        val("schedTeam"),
-      day_of_week:    val("schedDay"),
-      is_working_day: val("schedWorking"),
-    });
-    await api("/team-weekly-schedule?" + params, { method: "POST" });
-    setStatus("schedStatus", "Schedule updated.");
-    await loadSchedule();
-  } catch (e) { setStatus("schedStatus", e.message, true); }
-});
-
-/* ── Schedule Exceptions ──────────────────────────────────── */
+/* ── Week Exceptions ──────────────────────────────────────── */
 
 async function loadExceptions() {
-  const exceptions = await api("/team-schedule-exceptions");
+  const exceptions = await api("/team-week-exceptions");
   const body = qs("excBody");
   body.innerHTML = "";
   exceptions.forEach(x => {
@@ -547,8 +487,9 @@ async function loadExceptions() {
     tr.innerHTML = `
       <td>${x.id}</td>
       <td>${x.team_id}</td>
-      <td>${x.date}</td>
-      <td>${x.is_working_day ? "Yes" : "No"}</td>
+      <td>${x.year}</td>
+      <td>${x.week_number}</td>
+      <td>${x.capacity_multiplier}</td>
       <td>${x.reason ?? "—"}</td>
       <td><button class="action" onclick="deleteException(${x.id})">Delete</button></td>`;
     body.appendChild(tr);
@@ -558,13 +499,14 @@ async function loadExceptions() {
 qs("btnSetExc").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      team_id:        val("excTeam"),
-      date:           val("excDate"),
-      is_working_day: val("excWorking"),
+      team_id:             val("excTeam"),
+      year:                val("excYear"),
+      week_number:         val("excWeek"),
+      capacity_multiplier: val("excMultiplier"),
     });
     const reason = val("excReason");
     if (reason) params.set("reason", reason);
-    await api("/team-schedule-exceptions?" + params, { method: "POST" });
+    await api("/team-week-exceptions?" + params, { method: "POST" });
     setStatus("excStatus", "Exception saved.");
     await loadExceptions();
   } catch (e) { setStatus("excStatus", e.message, true); }
@@ -572,10 +514,24 @@ qs("btnSetExc").addEventListener("click", async () => {
 
 async function deleteException(id) {
   try {
-    await api(`/team-schedule-exceptions/${id}`, { method: "DELETE" });
+    await api(`/team-week-exceptions/${id}`, { method: "DELETE" });
     await loadExceptions();
   } catch (e) { setStatus("excStatus", e.message, true); }
 }
+
+qs("btnImportHolidays").addEventListener("click", async () => {
+  try {
+    const params = new URLSearchParams({
+      team_id:               val("holidayTeam"),
+      year:                  val("holidayYear"),
+      working_days_per_week: val("holidayWorkDays"),
+    });
+    setStatus("holidayStatus", "Importing…");
+    const data = await api("/team-week-exceptions/import-mexican-holidays?" + params, { method: "POST" });
+    setStatus("holidayStatus", `Imported ${data.holidays_imported} holiday week(s).`);
+    await loadExceptions();
+  } catch (e) { setStatus("holidayStatus", e.message, true); }
+});
 
 /* ── Requirements Calculator ──────────────────────────────── */
 
@@ -681,13 +637,15 @@ qs("btnGetOccupancy").addEventListener("click", async () => {
       const pct = w.occupancy_pct ?? 0;
       const displayPct = Math.min(pct, 100);
       const overClass = pct > 100 ? "over" : "";
+      const reasonLabel = w.reason ? ` <span class="warn">(${w.reason})</span>` : "";
       const row = document.createElement("div");
       row.className = "occ-bar-row";
       row.innerHTML = `
         <div class="occ-label">Week ${w.week_number}</div>
         <div class="occ-track">
           <div class="occ-fill ${overClass}" style="width:${displayPct}%">${pct}%</div>
-        </div>`;
+        </div>
+        <div style="font-size:.8rem; color:#888;">${reasonLabel}</div>`;
       chart.appendChild(row);
     });
   } catch (e) { setStatus("occStatus", e.message, true); }
