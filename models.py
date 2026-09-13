@@ -44,28 +44,30 @@ class Order(Base):
     calculated_delivery_date = Column(Date, nullable=True)
 
 
-class TeamWeeklySchedule(Base):
-    """Recurring weekly pattern: does this team normally work on this weekday?
-    Kept for finer-grained day-level scheduling if needed alongside the
-    week-level planning run."""
-    __tablename__ = "team_weekly_schedule"
+class TeamWeekException(Base):
+    """
+    Marks a specific (team, year, week_number) as having reduced or zero
+    availability -- a holiday, a maintenance shutdown, an extended
+    weekend, etc. This is the week-level equivalent of "Disponibilidad"
+    dropping below normal for a given week.
+
+    capacity_multiplier scales that week's weekly_capacity:
+        1.0 = full capacity (the default when no exception exists)
+        0.0 = fully unavailable that week
+        0.8 = e.g. one holiday out of five working days in that week
+
+    Replaces the earlier day-level TeamWeeklySchedule + TeamScheduleException
+    tables, which operated at day granularity and no longer matched the
+    week-level planning model the spec requires.
+    """
+    __tablename__ = "team_week_exception"
 
     id = Column(Integer, primary_key=True, index=True)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
-    day_of_week = Column(Integer, nullable=False)  # 0=Monday ... 6=Sunday
-    is_working_day = Column(Boolean, nullable=False, default=True)
-
-
-class TeamScheduleException(Base):
-    """One-off override for a specific date, layered on top of the recurring
-    weekly pattern."""
-    __tablename__ = "team_schedule_exception"
-
-    id = Column(Integer, primary_key=True, index=True)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
-    date = Column(Date, nullable=False)
-    is_working_day = Column(Boolean, nullable=False)
-    reason = Column(String(200), nullable=True)
+    year = Column(Integer, nullable=False)
+    week_number = Column(Integer, nullable=False)
+    capacity_multiplier = Column(Numeric, nullable=False, default=0)
+    reason = Column(String(200), nullable=True)  # e.g. "Día de la Independencia"
 
 
 class Inventory(Base):

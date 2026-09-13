@@ -4,6 +4,7 @@ from sqlalchemy import text
 from datetime import date
 from calculations import calculate_material_requirements
 from planning import run_monthly_planning
+from mexican_holidays import get_holiday_week_impact
 
 import models
 from database import engine, get_db
@@ -134,58 +135,33 @@ def list_orders(db: Session = Depends(get_db)):
     return db.query(models.Order).order_by(models.Order.order_date).all()
 
 
-@app.post("/team-weekly-schedule")
-def set_weekly_schedule(
+@app.post("/team-week-exceptions")
+def set_week_exception(
     team_id: int,
-    day_of_week: int,
-    is_working_day: bool,
-    db: Session = Depends(get_db),
-):
-    existing = db.query(models.TeamWeeklySchedule).filter(
-        models.TeamWeeklySchedule.team_id == team_id,
-        models.TeamWeeklySchedule.day_of_week == day_of_week,
-    ).first()
-    if existing:
-        existing.is_working_day = is_working_day
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    entry = models.TeamWeeklySchedule(
-        team_id=team_id, day_of_week=day_of_week, is_working_day=is_working_day
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return entry
-
-
-@app.get("/team-weekly-schedule")
-def list_weekly_schedule(db: Session = Depends(get_db)):
-    return db.query(models.TeamWeeklySchedule).all()
-
-
-@app.post("/team-schedule-exceptions")
-def set_schedule_exception(
-    team_id: int,
-    date: date,
-    is_working_day: bool,
+    year: int,
+    week_number: int,
+    capacity_multiplier: float,
     reason: str = None,
     db: Session = Depends(get_db),
 ):
-    existing = db.query(models.TeamScheduleException).filter(
-        models.TeamScheduleException.team_id == team_id,
-        models.TeamScheduleException.date == date,
+    if not (0 <= capacity_multiplier <= 1):
+        raise HTTPException(400, "capacity_multiplier must be between 0 and 1")
+
+    existing = db.query(models.TeamWeekException).filter(
+        models.TeamWeekException.team_id == team_id,
+        models.TeamWeekException.year == year,
+        models.TeamWeekException.week_number == week_number,
     ).first()
     if existing:
-        existing.is_working_day = is_working_day
+        existing.capacity_multiplier = capacity_multiplier
         existing.reason = reason
         db.commit()
         db.refresh(existing)
         return existing
 
-    entry = models.TeamScheduleException(
-        team_id=team_id, date=date, is_working_day=is_working_day, reason=reason
+    entry = models.TeamWeekException(
+        team_id=team_id, year=year, week_number=week_number,
+        capacity_multiplier=capacity_multiplier, reason=reason,
     )
     db.add(entry)
     db.commit()
@@ -193,25 +169,91 @@ def set_schedule_exception(
     return entry
 
 
-@app.get("/team-schedule-exceptions")
-def list_schedule_exceptions(db: Session = Depends(get_db)):
+@app.get("/team-week-exceptions")
+def list_week_exceptions(db: Session = Depends(get_db)):
     return (
-        db.query(models.TeamScheduleException)
-        .order_by(models.TeamScheduleException.date)
+        db.query(models.TeamWeekException)
+        .order_by(models.TeamWeekException.year, models.TeamWeekException.week_number)
         .all()
     )
 
 
-@app.delete("/team-schedule-exceptions/{exception_id}")
-def delete_schedule_exception(exception_id: int, db: Session = Depends(get_db)):
-    entry = db.query(models.TeamScheduleException).filter(
-        models.TeamScheduleException.id == exception_id
+@app.delete("/team-week-exceptions/{exception_id}")
+def delete_week_exception(exception_id: int, db: Session = Depends(get_db)):
+    entry = db.query(models.TeamWeekException).filter(
+        models.TeamWeekException.id == exception_id
     ).first()
     if not entry:
         return {"error": "Exception not found"}
     db.delete(entry)
     db.commit()
     return {"status": "deleted", "id": exception_id}
+
+
+@app.post("/team-week-exceptions/import-mexican-holidays")
+def import_mexican_holidays(
+    team_id: int,
+    year: int,
+    working_days_per_week: int = 5,
+    db: Session = Depends(get_db),
+):
+    """
+    Generates TeamWeekException rows for every Mexican federal holiday in
+    the given year, for the given team. Each holiday reduces that week's
+    capacity_multiplier proportionally: one holiday in a 5-day working
+    week -> multiplier 0.8 (4/5 of the week remains available). Multiple
+    holidays in the same week stack (rare, but handled).
+
+    If a week already has an exception set, this ADDS to the reduction
+    rather than overwriting -- e.g. a week with an existing 0.9 multiplier
+    (partial maintenance) and a holiday would become 0.9 - 0.2 = 0.7.
+    """
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+    if working_days_per_week <= 0:
+        raise HTTPException(400, "working_days_per_week must be greater than 0")
+
+    holiday_impact = get_holiday_week_impact(year, working_days_per_week)
+    reduction_per_holiday = 1.0 / working_days_per_week
+
+    created = []
+    for (iso_year, iso_week), descriptions in holiday_impact.items():
+        reduction = min(reduction_per_holiday * len(descriptions), 1.0)
+
+        existing = db.query(models.TeamWeekException).filter(
+            models.TeamWeekException.team_id == team_id,
+            models.TeamWeekException.year == iso_year,
+            models.TeamWeekException.week_number == iso_week,
+        ).first()
+
+        reason_text = ", ".join(descriptions)
+
+        if existing:
+            new_multiplier = max(float(existing.capacity_multiplier) - reduction, 0.0)
+            existing.capacity_multiplier = new_multiplier
+            existing.reason = f"{existing.reason}; {reason_text}" if existing.reason else reason_text
+            db.add(existing)
+            created.append(existing)
+        else:
+            new_multiplier = max(1.0 - reduction, 0.0)
+            entry = models.TeamWeekException(
+                team_id=team_id, year=iso_year, week_number=iso_week,
+                capacity_multiplier=new_multiplier, reason=reason_text,
+            )
+            db.add(entry)
+            created.append(entry)
+
+    db.commit()
+    for entry in created:
+        db.refresh(entry)
+
+    return {
+        "team_id": team_id,
+        "year": year,
+        "holidays_imported": len(created),
+        "exceptions": created,
+    }
 
 
 @app.get("/orders/{order_id}/requirements")
@@ -333,14 +375,28 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
             .all()
         )
         week_total = sum(float(a.quantity_allocated) for a in allocated)
+
+        exception = (
+            db.query(models.TeamWeekException)
+            .filter(
+                models.TeamWeekException.team_id == team_id,
+                models.TeamWeekException.year == iso_year,
+                models.TeamWeekException.week_number == iso_week,
+            )
+            .first()
+        )
+        multiplier = float(exception.capacity_multiplier) if exception else 1.0
+        effective_capacity = weekly_capacity * multiplier
         total_allocated += week_total
 
         breakdown.append({
             "year": iso_year,
             "week_number": iso_week,
             "allocated": round(week_total, 2),
-            "capacity": weekly_capacity,
-            "occupancy_pct": round((week_total / weekly_capacity) * 100, 1) if weekly_capacity > 0 else None,
+            "capacity": round(effective_capacity, 2),
+            "capacity_multiplier": multiplier,
+            "reason": exception.reason if exception else None,
+            "occupancy_pct": round((week_total / effective_capacity) * 100, 1) if effective_capacity > 0 else None,
         })
 
     total_capacity = weekly_capacity * len(all_weeks)

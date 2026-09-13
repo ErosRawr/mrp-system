@@ -52,12 +52,29 @@ def _already_allocated_this_week(team_id: int, year: int, week_number: int, db: 
     return sum(float(r.quantity_allocated) for r in rows)
 
 
+def _get_capacity_multiplier(team_id: int, year: int, week_number: int, db: Session) -> float:
+    """Returns the capacity_multiplier for this team/week, or 1.0 (full
+    capacity) if no exception has been set."""
+    exception = (
+        db.query(models.TeamWeekException)
+        .filter(
+            models.TeamWeekException.team_id == team_id,
+            models.TeamWeekException.year == year,
+            models.TeamWeekException.week_number == week_number,
+        )
+        .first()
+    )
+    return float(exception.capacity_multiplier) if exception else 1.0
+
+
 def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                            start_year: int, start_week: int, db: Session):
     """
     Walks forward week by week from (start_year, start_week), consuming
     whatever weekly capacity is left (after subtracting what other orders
-    already claimed for that team/week), until quantity_needed is covered.
+    already claimed for that team/week, AND scaling down for any
+    TeamWeekException such as a holiday or maintenance shutdown), until
+    quantity_needed is covered.
 
     Returns dict: {end_year, end_week, weeks_elapsed, breakdown, fully_scheduled}
     """
@@ -65,8 +82,8 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     if not team:
         return None
 
-    weekly_capacity = team.weekly_capacity
-    if weekly_capacity <= 0:
+    base_weekly_capacity = team.weekly_capacity
+    if base_weekly_capacity <= 0:
         return {
             "end_year": start_year,
             "end_week": start_week,
@@ -83,8 +100,11 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     max_iterations = 260  # ~5 years of weeks, safety cap
 
     while remaining_needed > 0 and weeks_elapsed < max_iterations:
+        multiplier = _get_capacity_multiplier(team_id, year, week, db)
+        effective_weekly_capacity = base_weekly_capacity * multiplier
+
         already_used = _already_allocated_this_week(team_id, year, week, db)
-        free_capacity = max(weekly_capacity - already_used, 0.0)
+        free_capacity = max(effective_weekly_capacity - already_used, 0.0)
 
         if free_capacity > 0:
             allocate_this_week = min(free_capacity, remaining_needed)
@@ -93,6 +113,7 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                 "week_number": week,
                 "allocated": round(allocate_this_week, 2),
                 "free_capacity_before": round(free_capacity, 2),
+                "capacity_multiplier": multiplier,
             })
 
             db.add(models.CapacityAllocation(
@@ -102,10 +123,7 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                 week_number=week,
                 quantity_allocated=allocate_this_week,
             ))
-            db.flush()  # make this allocation visible to subsequent queries
-                        # in the same session, BEFORE the final commit --
-                        # otherwise later orders in this same planning run
-                        # won't see earlier orders' claims and can over-allocate.
+            db.flush()
 
             remaining_needed -= allocate_this_week
 
