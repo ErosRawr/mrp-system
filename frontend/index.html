@@ -1,337 +1,433 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MRP System</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MRP — Ruta de Proceso</title>
+<style>
+  :root {
+    --bg: #0f1215;
+    --panel: #171b1f;
+    --panel-raised: #1d2226;
+    --border: #262c31;
+    --border-soft: #1e2328;
+    --text: #d7dbde;
+    --text-dim: #838d94;
+    --text-faint: #5a636a;
+    --accent: #4a9eda;
+    --accent-dim: #2d5f80;
+    --warn: #d99a4e;
+    --danger: #d9695a;
+    --good: #5fb87a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #121212;
-      color: #e0e0e0;
-      padding: 1rem;
-    }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    h1 { margin-bottom: .75rem; color: #ffffff; }
-    h2 { margin-bottom: .5rem; color: #ffffff; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+    font-size: 14px;
+  }
 
-    .tab-bar {
-      display: flex;
-      gap: 2px;
-      margin-bottom: 1rem;
-      border-bottom: 2px solid #333;
-      flex-wrap: wrap;
-    }
-    .tab-bar button {
-      padding: .5rem 1rem;
-      border: 1px solid #333;
-      border-bottom: none;
-      background: #1e1e1e;
-      color: #aaa;
-      cursor: pointer;
-      font-size: .9rem;
-      border-radius: 4px 4px 0 0;
-    }
-    .tab-bar button.active {
-      background: #242424;
-      color: #fff;
-      font-weight: bold;
-      border-color: #555;
-    }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
+  /* ── Sidebar ──────────────────────────────────────────────── */
+  .sidebar {
+    width: 210px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .brand {
+    padding: 0 1.25rem 1rem;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: .75rem;
+  }
+  .brand-title { font-size: .95rem; font-weight: 600; color: #fff; letter-spacing: .01em; }
+  .brand-sub { font-size: .72rem; color: var(--text-faint); margin-top: .15rem; }
 
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-bottom: 1rem;
-      background: #1a1a1a;
-    }
-    th, td {
-      border: 1px solid #333;
-      padding: .35rem .5rem;
-      text-align: left;
-      color: #ddd;
-    }
-    th { background: #262626; color: #fff; }
-    tr:hover td { background: #222; }
+  .nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: .55rem 1.25rem;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: var(--text-dim);
+    font-size: .85rem;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .nav-item:hover { color: var(--text); background: var(--panel-raised); }
+  .nav-item.active {
+    color: #fff;
+    border-left-color: var(--accent);
+    background: var(--panel-raised);
+  }
 
-    .form-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .75rem;
-      margin-bottom: .75rem;
-      align-items: flex-end;
-      background: #1a1a1a;
-      padding: .75rem;
-      border-radius: 6px;
-      border: 1px solid #2a2a2a;
-    }
-    .form-row label {
-      display: flex;
-      flex-direction: column;
-      font-size: .85rem;
-      color: #aaa;
-    }
-    .form-row input,
-    .form-row select {
-      padding: .3rem .4rem;
-      font-size: .9rem;
-      background: #242424;
-      color: #eee;
-      border: 1px solid #3a3a3a;
-      border-radius: 4px;
-    }
-    .form-row input:focus,
-    .form-row select:focus {
-      outline: none;
-      border-color: #5a8fd6;
-    }
-    button.action {
-      padding: .4rem .9rem;
-      cursor: pointer;
-      background: #2f6fdb;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      font-size: .9rem;
-    }
-    button.action:hover { background: #3d7ce8; }
+  /* ── Main content ─────────────────────────────────────────── */
+  .main {
+    flex: 1;
+    padding: 1.75rem 2rem;
+    max-width: 1100px;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
 
-    .status {
-      margin-top: .5rem;
-      font-style: italic;
-      color: #888;
-    }
-    .status.error { color: #e06c6c; }
+  h1 { font-size: 1.15rem; font-weight: 600; color: #fff; margin-bottom: .2rem; }
+  .view-desc { font-size: .82rem; color: var(--text-dim); margin-bottom: 1.25rem; max-width: 62ch; line-height: 1.5; }
 
-    #reqSummary, #planSummary {
-      margin-bottom: .75rem;
-      background: #1a1a1a;
-      padding: .75rem;
-      border-radius: 6px;
-      border: 1px solid #2a2a2a;
-      color: #ddd;
-    }
-    .highlight { color: #6fd66f; font-weight: bold; }
-    .warn { color: #e0b96c; }
+  /* ── Panels / forms ───────────────────────────────────────── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.1rem;
+  }
+  .panel-title {
+    font-size: .72rem;
+    text-transform: none;
+    color: var(--text-faint);
+    margin-bottom: .7rem;
+    font-weight: 500;
+  }
 
-    /* ── Occupancy bars ───────────────────────────────────────── */
-    .occ-bar-row {
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      margin-bottom: .4rem;
-    }
-    .occ-label { width: 90px; font-size: .85rem; color: #aaa; }
-    .occ-track {
-      flex: 1;
-      background: #262626;
-      border-radius: 4px;
-      height: 20px;
-      overflow: hidden;
-      border: 1px solid #333;
-    }
-    .occ-fill {
-      height: 100%;
-      background: #2f6fdb;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding-right: 6px;
-      font-size: .75rem;
-      color: #fff;
-      white-space: nowrap;
-    }
-    .occ-fill.over { background: #d9534f; }
-  </style>
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .9rem;
+    align-items: flex-end;
+  }
+  .field { display: flex; flex-direction: column; gap: .3rem; }
+  .field label { font-size: .74rem; color: var(--text-dim); }
+  .field input, .field select {
+    padding: .4rem .5rem;
+    font-size: .84rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-family: var(--sans);
+    min-width: 130px;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--accent-dim);
+  }
+  .field input[type=number] { font-family: var(--mono); }
+
+  button.btn {
+    padding: .45rem 1rem;
+    cursor: pointer;
+    background: var(--accent-dim);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    font-size: .84rem;
+    font-family: var(--sans);
+    height: 32px;
+  }
+  button.btn:hover { background: var(--accent); }
+  button.btn.small { padding: .25rem .6rem; font-size: .76rem; height: auto; }
+
+  .status { margin-top: .6rem; font-size: .78rem; color: var(--text-faint); }
+  .status.error { color: var(--danger); }
+
+  /* ── Tables ───────────────────────────────────────────────── */
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+  th, td {
+    padding: .45rem .6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  th {
+    color: var(--text-faint);
+    font-weight: 500;
+    font-size: .72rem;
+    border-bottom: 1px solid var(--border);
+  }
+  td { color: var(--text); }
+  td.num, th.num { font-family: var(--mono); text-align: right; }
+  tr:hover td { background: var(--panel-raised); }
+
+  .highlight { color: var(--good); font-weight: 600; }
+  .warn-text { color: var(--warn); font-weight: 600; }
+  .danger-text { color: var(--danger); font-weight: 600; }
+
+  /* ── Summary box ──────────────────────────────────────────── */
+  .summary-box {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .8rem 1rem;
+    margin-bottom: 1rem;
+    font-size: .84rem;
+    line-height: 1.7;
+  }
+  .summary-box .big-num { font-family: var(--mono); font-size: 1.3rem; color: #fff; font-weight: 600; }
+
+  /* ── Occupancy bars ───────────────────────────────────────── */
+  .occ-team-block { margin-bottom: 1.4rem; }
+  .occ-team-name { font-size: .82rem; color: var(--text); margin-bottom: .5rem; font-weight: 600; }
+  .occ-bar-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .3rem; }
+  .occ-week-label { width: 70px; font-size: .72rem; color: var(--text-faint); font-family: var(--mono); flex-shrink: 0; }
+  .occ-track {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    height: 18px;
+    overflow: hidden;
+    position: relative;
+  }
+  .occ-fill {
+    height: 100%;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 6px;
+    font-size: .68rem;
+    color: #fff;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .occ-fill.over { background: var(--danger); }
+  .occ-fill.holiday { background: var(--warn); }
+  .occ-reason { font-size: .72rem; color: var(--text-faint); width: 140px; flex-shrink: 0; }
+
+  /* ── Calendar ─────────────────────────────────────────────── */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .4rem;
+  }
+  .cal-week {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .5rem .6rem;
+    font-size: .74rem;
+  }
+  .cal-week.full { border-left: 2px solid var(--good); }
+  .cal-week.reduced { border-left: 2px solid var(--warn); }
+  .cal-week.off { border-left: 2px solid var(--danger); }
+  .cal-week-num { font-family: var(--mono); color: var(--text-dim); font-size: .7rem; }
+  .cal-week-pct { font-family: var(--mono); font-size: 1rem; color: #fff; margin: .2rem 0; }
+  .cal-week-reason { color: var(--text-faint); font-size: .68rem; line-height: 1.3; }
+</style>
 </head>
 <body>
 
-<h1>MRP System</h1>
-
-<div class="tab-bar" id="tabBar">
-  <button class="active" data-tab="teams">Teams</button>
-  <button data-tab="orders">Orders</button>
-  <button data-tab="exceptions">Week Exceptions</button>
-  <button data-tab="requirements">Requirements Calculator</button>
-  <button data-tab="planning">Monthly Planning</button>
-  <button data-tab="occupancy">Occupancy</button>
-</div>
-
-<!-- TEAMS -->
-<div class="tab-panel active" id="tab-teams">
-  <h2>Teams</h2>
-
-  <div class="form-row">
-    <label>Name              <input id="teamName" /></label>
-    <label>Sequence          <input id="teamSeq" type="number" min="1" /></label>
-    <label>Monthly capacity  <input id="teamCap" type="number" step="0.01" /></label>
-    <label>Weeks available   <input id="teamWeeks" type="number" min="1" value="4" /></label>
-    <label>Efficiency        <input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></label>
-    <button class="action" id="btnCreateTeam">Create</button>
+<nav class="sidebar">
+  <div class="brand">
+    <div class="brand-title">Ruta de Proceso</div>
+    <div class="brand-sub">MRP — planta acerera</div>
   </div>
-  <div class="status" id="teamStatus"></div>
+  <button class="nav-item active" data-view="teams">Equipos</button>
+  <button class="nav-item" data-view="orders">Pedidos</button>
+  <button class="nav-item" data-view="exceptions">Disponibilidad</button>
+  <button class="nav-item" data-view="calendar">Calendario</button>
+  <button class="nav-item" data-view="requirements">Requerimientos</button>
+  <button class="nav-item" data-view="planning">Planeación Mensual</button>
+  <button class="nav-item" data-view="occupancy">Ocupación</button>
+</nav>
 
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>Name</th><th>Sequence</th>
-        <th>Monthly Capacity</th><th>Weeks Available</th><th>Weekly Capacity</th><th>Efficiency</th>
-      </tr>
-    </thead>
-    <tbody id="teamsBody"></tbody>
-  </table>
-</div>
+<main class="main">
 
-<!-- ORDERS -->
-<div class="tab-panel" id="tab-orders">
-  <h2>Orders</h2>
+  <!-- EQUIPOS -->
+  <div class="view active" id="view-teams">
+    <h1>Equipos</h1>
+    <p class="view-desc">La ruta de proceso: cada equipo tiene una capacidad mensual, una disponibilidad en semanas, y un rendimiento.</p>
 
-  <div class="form-row">
-    <label>Customer    <input id="orderCust" /></label>
-    <label>Quantity    <input id="orderQty" type="number" step="0.01" /></label>
-    <label>Entry team
-      <select id="orderTeam"></select>
-    </label>
-    <label>Order date  <input id="orderDate" type="date" /></label>
-    <label>Requested delivery date <input id="orderReqDate" type="date" /></label>
-    <button class="action" id="btnCreateOrder">Create</button>
+    <div class="panel">
+      <div class="panel-title">Nuevo equipo</div>
+      <div class="form-row">
+        <div class="field"><label>Nombre</label><input id="teamName" /></div>
+        <div class="field"><label>Secuencia</label><input id="teamSeq" type="number" min="1" /></div>
+        <div class="field"><label>Capacidad mensual</label><input id="teamCap" type="number" step="0.01" /></div>
+        <div class="field"><label>Semanas disponibles</label><input id="teamWeeks" type="number" min="1" value="4" /></div>
+        <div class="field"><label>Rendimiento</label><input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></div>
+        <button class="btn" id="btnCreateTeam">Crear</button>
+      </div>
+      <div class="status" id="teamStatus"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Nombre</th><th class="num">Seq</th>
+          <th class="num">Cap. mensual</th><th class="num">Semanas</th><th class="num">Cap. semanal</th><th class="num">Rendimiento</th>
+        </tr>
+      </thead>
+      <tbody id="teamsBody"></tbody>
+    </table>
   </div>
-  <div class="status" id="orderStatus"></div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>Customer</th><th>Qty</th>
-        <th>Entry Team ID</th><th>Order Date</th><th>Requested Delivery</th>
-        <th>Planning Period</th><th>Calculated Delivery</th>
-      </tr>
-    </thead>
-    <tbody id="ordersBody"></tbody>
-  </table>
-</div>
+  <!-- PEDIDOS -->
+  <div class="view" id="view-orders">
+    <h1>Pedidos</h1>
+    <p class="view-desc">Cada pedido entra en un equipo de la ruta y lleva una fecha solicitada de entrega.</p>
 
-<!-- WEEK EXCEPTIONS -->
-<div class="tab-panel" id="tab-exceptions">
-  <h2>Week Exceptions</h2>
-  <p style="color:#888; margin-bottom:.5rem;">
-    Reduces a team's capacity for a specific (year, week) -- holidays,
-    maintenance shutdowns, etc. A multiplier of 1.0 is full capacity, 0.0
-    is fully unavailable, 0.8 is e.g. one holiday in a 5-day week.
-  </p>
+    <div class="panel">
+      <div class="panel-title">Nuevo pedido</div>
+      <div class="form-row">
+        <div class="field"><label>Cliente</label><input id="orderCust" /></div>
+        <div class="field"><label>Tonelaje</label><input id="orderQty" type="number" step="0.01" /></div>
+        <div class="field"><label>Equipo de entrada</label><select id="orderTeam"></select></div>
+        <div class="field"><label>Fecha de pedido</label><input id="orderDate" type="date" /></div>
+        <div class="field"><label>Fecha solicitada</label><input id="orderReqDate" type="date" /></div>
+        <button class="btn" id="btnCreateOrder">Crear</button>
+      </div>
+      <div class="status" id="orderStatus"></div>
+    </div>
 
-  <div class="form-row">
-    <label>Team
-      <select id="excTeam"></select>
-    </label>
-    <label>Year <input id="excYear" type="number" value="2026" /></label>
-    <label>Week # <input id="excWeek" type="number" min="1" max="53" /></label>
-    <label>Capacity multiplier <input id="excMultiplier" type="number" step="0.05" min="0" max="1" value="1.0" /></label>
-    <label>Reason (optional) <input id="excReason" placeholder="e.g. Maintenance" /></label>
-    <button class="action" id="btnSetExc">Set</button>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Cliente</th><th class="num">Ton</th>
+          <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
+          <th>Periodo</th><th>F. calculada</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
   </div>
-  <div class="status" id="excStatus"></div>
 
-  <div class="form-row">
-    <label>Import holidays for team
-      <select id="holidayTeam"></select>
-    </label>
-    <label>Year <input id="holidayYear" type="number" value="2026" /></label>
-    <label>Working days/week <input id="holidayWorkDays" type="number" min="1" value="5" /></label>
-    <button class="action" id="btnImportHolidays">Import Mexican Holidays</button>
+  <!-- DISPONIBILIDAD -->
+  <div class="view" id="view-exceptions">
+    <h1>Disponibilidad</h1>
+    <p class="view-desc">Reduce la capacidad de un equipo para una semana específica — mantenimiento, días festivos, etc. Multiplicador 1.0 = capacidad completa, 0.0 = sin disponibilidad.</p>
+
+    <div class="panel">
+      <div class="panel-title">Nueva excepción</div>
+      <div class="form-row">
+        <div class="field"><label>Equipo</label><select id="excTeam"></select></div>
+        <div class="field"><label>Año</label><input id="excYear" type="number" value="2026" /></div>
+        <div class="field"><label>Semana</label><input id="excWeek" type="number" min="1" max="53" /></div>
+        <div class="field"><label>Multiplicador</label><input id="excMultiplier" type="number" step="0.05" min="0" max="1" value="1.0" /></div>
+        <div class="field"><label>Motivo (opcional)</label><input id="excReason" placeholder="Mantenimiento" /></div>
+        <button class="btn" id="btnSetExc">Guardar</button>
+      </div>
+      <div class="status" id="excStatus"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Importar días festivos (México)</div>
+      <div class="form-row">
+        <div class="field"><label>Equipo</label><select id="holidayTeam"></select></div>
+        <div class="field"><label>Año</label><input id="holidayYear" type="number" value="2026" /></div>
+        <div class="field"><label>Días laborales/semana</label><input id="holidayWorkDays" type="number" min="1" value="5" /></div>
+        <button class="btn" id="btnImportHolidays">Importar</button>
+      </div>
+      <div class="status" id="holidayStatus"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>ID</th><th class="num">Equipo</th><th class="num">Año</th><th class="num">Semana</th><th class="num">Mult.</th><th>Motivo</th><th></th></tr>
+      </thead>
+      <tbody id="excBody"></tbody>
+    </table>
   </div>
-  <div class="status" id="holidayStatus"></div>
 
-  <table>
-    <thead>
-      <tr><th>ID</th><th>Team ID</th><th>Year</th><th>Week</th><th>Multiplier</th><th>Reason</th><th></th></tr>
-    </thead>
-    <tbody id="excBody"></tbody>
-  </table>
-</div>
+  <!-- CALENDARIO -->
+  <div class="view" id="view-calendar">
+    <h1>Calendario de disponibilidad</h1>
+    <p class="view-desc">Vista de todas las semanas del año para un equipo, con sus excepciones marcadas.</p>
 
-<!-- REQUIREMENTS CALCULATOR -->
-<div class="tab-panel" id="tab-requirements">
-  <h2>Requirements Calculator</h2>
-  <p style="color:#888; margin-bottom:.5rem;">
-    Pure material calculation -- how much each team must produce. No dates
-    or capacity contention (that's the Monthly Planning run).
-  </p>
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Equipo</label><select id="calTeam"></select></div>
+        <div class="field"><label>Año</label><input id="calYear" type="number" value="2026" /></div>
+        <button class="btn" id="btnLoadCalendar">Ver</button>
+      </div>
+      <div class="status" id="calStatus"></div>
+    </div>
 
-  <div class="form-row">
-    <label>Order
-      <select id="reqOrder"></select>
-    </label>
-    <button class="action" id="btnCalcReq">Calculate</button>
+    <div class="cal-grid" id="calGrid"></div>
   </div>
-  <div class="status" id="reqStatus"></div>
 
-  <div id="reqSummary"></div>
+  <!-- REQUERIMIENTOS -->
+  <div class="view" id="view-requirements">
+    <h1>Requerimientos de material</h1>
+    <p class="view-desc">Cálculo puro de material por equipo, en base al rendimiento. Sin fechas ni capacidad (eso corresponde a la planeación mensual).</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Team</th><th>Seq</th>
-        <th>Output Needed</th><th>Input Needed</th>
-        <th>Efficiency</th><th>Monthly Capacity</th><th>Weekly Capacity</th>
-      </tr>
-    </thead>
-    <tbody id="reqBody"></tbody>
-  </table>
-</div>
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Pedido</label><select id="reqOrder"></select></div>
+        <button class="btn" id="btnCalcReq">Calcular</button>
+      </div>
+      <div class="status" id="reqStatus"></div>
+    </div>
 
-<!-- MONTHLY PLANNING -->
-<div class="tab-panel" id="tab-planning">
-  <h2>Monthly Planning</h2>
-  <p style="color:#888; margin-bottom:.5rem;">
-    Takes every order registered for the given month, sorts by requested
-    delivery date, and allocates weekly capacity across the full team chain
-    -- writing a calculated delivery date back onto each order.
-  </p>
+    <div class="summary-box" id="reqSummary" style="display:none;"></div>
 
-  <div class="form-row">
-    <label>Year  <input id="planYear" type="number" value="2026" /></label>
-    <label>Month <input id="planMonth" type="number" min="1" max="12" value="9" /></label>
-    <button class="action" id="btnRunPlanning">Run Planning</button>
+    <table>
+      <thead>
+        <tr>
+          <th>Equipo</th><th class="num">Seq</th>
+          <th class="num">Ton. salida</th><th class="num">Ton. entrada</th>
+          <th class="num">Rend.</th><th class="num">Cap. mensual</th><th class="num">Cap. semanal</th>
+        </tr>
+      </thead>
+      <tbody id="reqBody"></tbody>
+    </table>
   </div>
-  <div class="status" id="planStatus"></div>
 
-  <div id="planSummary"></div>
+  <!-- PLANEACION -->
+  <div class="view" id="view-planning">
+    <h1>Planeación mensual</h1>
+    <p class="view-desc">Toma todos los pedidos del mes, los ordena por fecha solicitada, y asigna capacidad semanal a lo largo de toda la ruta.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Order</th><th>Customer</th><th>Requested Delivery</th>
-        <th>Calculated Delivery</th><th>Late?</th>
-      </tr>
-    </thead>
-    <tbody id="planBody"></tbody>
-  </table>
-</div>
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Año</label><input id="planYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="planMonth" type="number" min="1" max="12" value="9" /></div>
+        <button class="btn" id="btnRunPlanning">Ejecutar planeación</button>
+      </div>
+      <div class="status" id="planStatus"></div>
+    </div>
 
-<!-- OCCUPANCY -->
-<div class="tab-panel" id="tab-occupancy">
-  <h2>Occupancy</h2>
-  <p style="color:#888; margin-bottom:.5rem;">
-    Percentage of weekly capacity allocated per team, for a given month.
-  </p>
+    <div class="summary-box" id="planSummary" style="display:none;"></div>
 
-  <div class="form-row">
-    <label>Team
-      <select id="occTeam"></select>
-    </label>
-    <label>Year  <input id="occYear" type="number" value="2026" /></label>
-    <label>Month <input id="occMonth" type="number" min="1" max="12" value="9" /></label>
-    <button class="action" id="btnGetOccupancy">View</button>
+    <table>
+      <thead>
+        <tr>
+          <th>Pedido</th><th>Cliente</th><th>F. solicitada</th>
+          <th>F. calculada</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="planBody"></tbody>
+    </table>
   </div>
-  <div class="status" id="occStatus"></div>
 
-  <div id="occSummary"></div>
-  <div id="occChart"></div>
-</div>
+  <!-- OCUPACION -->
+  <div class="view" id="view-occupancy">
+    <h1>Ocupación por equipo</h1>
+    <p class="view-desc">Porcentaje de capacidad semanal utilizada, para todos los equipos de la ruta durante un mes.</p>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Año</label><input id="occYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="occMonth" type="number" min="1" max="12" value="9" /></div>
+        <button class="btn" id="btnGetOccupancy">Ver todos los equipos</button>
+      </div>
+      <div class="status" id="occStatus"></div>
+    </div>
+
+    <div id="occAllTeams"></div>
+  </div>
+
+</main>
 
 <script>
 const API = "http://localhost:8000";
@@ -345,7 +441,7 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-function qs(id)  { return document.getElementById(id); }
+function qs(id) { return document.getElementById(id); }
 function val(id) { return qs(id).value; }
 
 function setStatus(id, msg, isError = false) {
@@ -354,30 +450,28 @@ function setStatus(id, msg, isError = false) {
   el.className = "status" + (isError ? " error" : "");
 }
 
-document.querySelectorAll("#tabBar button").forEach(btn => {
+document.querySelectorAll(".nav-item").forEach(btn => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll("#tabBar button").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     btn.classList.add("active");
-    qs("tab-" + btn.dataset.tab).classList.add("active");
-    refresh(btn.dataset.tab);
+    qs("view-" + btn.dataset.view).classList.add("active");
+    refresh(btn.dataset.view);
   });
 });
 
-async function refresh(tab) {
+async function refresh(view) {
   try {
-    if (tab === "teams")        await loadTeams();
-    if (tab === "orders")     { await populateTeamDropdown("orderTeam"); await loadOrders(); }
-    if (tab === "exceptions") {
+    if (view === "teams") await loadTeams();
+    if (view === "orders") { await populateTeamDropdown("orderTeam"); await loadOrders(); }
+    if (view === "exceptions") {
       await populateTeamDropdown("excTeam");
       await populateTeamDropdown("holidayTeam");
       await loadExceptions();
     }
-    if (tab === "requirements") { await populateOrderDropdown("reqOrder"); }
-    if (tab === "occupancy")   { await populateTeamDropdown("occTeam"); }
-  } catch (e) {
-    console.error(e);
-  }
+    if (view === "calendar") await populateTeamDropdown("calTeam");
+    if (view === "requirements") await populateOrderDropdown("reqOrder");
+  } catch (e) { console.error(e); }
 }
 
 async function populateTeamDropdown(selectId) {
@@ -404,7 +498,7 @@ async function populateOrderDropdown(selectId) {
   });
 }
 
-/* ── Teams ────────────────────────────────────────────────── */
+/* ── Equipos ──────────────────────────────────────────────── */
 
 async function loadTeams() {
   const teams = await api("/teams");
@@ -413,13 +507,9 @@ async function loadTeams() {
   teams.forEach(t => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${t.id}</td>
-      <td>${t.name}</td>
-      <td>${t.sequence_order}</td>
-      <td>${t.monthly_capacity}</td>
-      <td>${t.weeks_available}</td>
-      <td>${t.weekly_capacity}</td>
-      <td>${t.efficiency}</td>`;
+      <td>${t.id}</td><td>${t.name}</td><td class="num">${t.sequence_order}</td>
+      <td class="num">${t.monthly_capacity}</td><td class="num">${t.weeks_available}</td>
+      <td class="num">${t.weekly_capacity}</td><td class="num">${t.efficiency}</td>`;
     body.appendChild(tr);
   });
 }
@@ -427,19 +517,17 @@ async function loadTeams() {
 qs("btnCreateTeam").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      name:             val("teamName"),
-      sequence_order:   val("teamSeq"),
-      monthly_capacity: val("teamCap"),
-      weeks_available:  val("teamWeeks"),
-      efficiency:       val("teamEff"),
+      name: val("teamName"), sequence_order: val("teamSeq"),
+      monthly_capacity: val("teamCap"), weeks_available: val("teamWeeks"),
+      efficiency: val("teamEff"),
     });
     await api("/teams?" + params, { method: "POST" });
-    setStatus("teamStatus", "Team created.");
+    setStatus("teamStatus", "Equipo creado.");
     await loadTeams();
   } catch (e) { setStatus("teamStatus", e.message, true); }
 });
 
-/* ── Orders ───────────────────────────────────────────────── */
+/* ── Pedidos ──────────────────────────────────────────────── */
 
 async function loadOrders() {
   const orders = await api("/orders");
@@ -448,11 +536,8 @@ async function loadOrders() {
   orders.forEach(o => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${o.id}</td>
-      <td>${o.customer_name}</td>
-      <td>${o.quantity_requested}</td>
-      <td>${o.entry_team_id}</td>
-      <td>${o.order_date}</td>
+      <td>${o.id}</td><td>${o.customer_name}</td><td class="num">${o.quantity_requested}</td>
+      <td class="num">${o.entry_team_id}</td><td>${o.order_date}</td>
       <td>${o.requested_delivery_date ?? "—"}</td>
       <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
       <td>${o.calculated_delivery_date ?? "—"}</td>`;
@@ -463,20 +548,18 @@ async function loadOrders() {
 qs("btnCreateOrder").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      customer_name:      val("orderCust"),
-      quantity_requested: val("orderQty"),
-      entry_team_id:      val("orderTeam"),
-      order_date:         val("orderDate"),
+      customer_name: val("orderCust"), quantity_requested: val("orderQty"),
+      entry_team_id: val("orderTeam"), order_date: val("orderDate"),
     });
     const reqDate = val("orderReqDate");
     if (reqDate) params.set("requested_delivery_date", reqDate);
     await api("/orders?" + params, { method: "POST" });
-    setStatus("orderStatus", "Order created.");
+    setStatus("orderStatus", "Pedido creado.");
     await loadOrders();
   } catch (e) { setStatus("orderStatus", e.message, true); }
 });
 
-/* ── Week Exceptions ──────────────────────────────────────── */
+/* ── Disponibilidad ───────────────────────────────────────── */
 
 async function loadExceptions() {
   const exceptions = await api("/team-week-exceptions");
@@ -485,13 +568,10 @@ async function loadExceptions() {
   exceptions.forEach(x => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${x.id}</td>
-      <td>${x.team_id}</td>
-      <td>${x.year}</td>
-      <td>${x.week_number}</td>
-      <td>${x.capacity_multiplier}</td>
+      <td>${x.id}</td><td class="num">${x.team_id}</td><td class="num">${x.year}</td>
+      <td class="num">${x.week_number}</td><td class="num">${x.capacity_multiplier}</td>
       <td>${x.reason ?? "—"}</td>
-      <td><button class="action" onclick="deleteException(${x.id})">Delete</button></td>`;
+      <td><button class="btn small" onclick="deleteException(${x.id})">Eliminar</button></td>`;
     body.appendChild(tr);
   });
 }
@@ -499,15 +579,13 @@ async function loadExceptions() {
 qs("btnSetExc").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      team_id:             val("excTeam"),
-      year:                val("excYear"),
-      week_number:         val("excWeek"),
+      team_id: val("excTeam"), year: val("excYear"), week_number: val("excWeek"),
       capacity_multiplier: val("excMultiplier"),
     });
     const reason = val("excReason");
     if (reason) params.set("reason", reason);
     await api("/team-week-exceptions?" + params, { method: "POST" });
-    setStatus("excStatus", "Exception saved.");
+    setStatus("excStatus", "Excepción guardada.");
     await loadExceptions();
   } catch (e) { setStatus("excStatus", e.message, true); }
 });
@@ -522,132 +600,159 @@ async function deleteException(id) {
 qs("btnImportHolidays").addEventListener("click", async () => {
   try {
     const params = new URLSearchParams({
-      team_id:               val("holidayTeam"),
-      year:                  val("holidayYear"),
+      team_id: val("holidayTeam"), year: val("holidayYear"),
       working_days_per_week: val("holidayWorkDays"),
     });
-    setStatus("holidayStatus", "Importing…");
+    setStatus("holidayStatus", "Importando…");
     const data = await api("/team-week-exceptions/import-mexican-holidays?" + params, { method: "POST" });
-    setStatus("holidayStatus", `Imported ${data.holidays_imported} holiday week(s).`);
+    setStatus("holidayStatus", `${data.holidays_imported} semana(s) festiva(s) importada(s).`);
     await loadExceptions();
   } catch (e) { setStatus("holidayStatus", e.message, true); }
 });
 
-/* ── Requirements Calculator ──────────────────────────────── */
+/* ── Calendario ───────────────────────────────────────────── */
+
+qs("btnLoadCalendar").addEventListener("click", async () => {
+  try {
+    const teamId = val("calTeam");
+    const year = val("calYear");
+    if (!teamId) { setStatus("calStatus", "Selecciona un equipo.", true); return; }
+    setStatus("calStatus", "Cargando…");
+
+    const allExceptions = await api("/team-week-exceptions");
+    const teamExceptions = {};
+    allExceptions
+      .filter(x => String(x.team_id) === String(teamId) && String(x.year) === String(year))
+      .forEach(x => { teamExceptions[x.week_number] = x; });
+
+    const grid = qs("calGrid");
+    grid.innerHTML = "";
+    for (let week = 1; week <= 52; week++) {
+      const exc = teamExceptions[week];
+      const mult = exc ? parseFloat(exc.capacity_multiplier) : 1.0;
+      const pct = Math.round(mult * 100);
+      let cls = "full";
+      if (mult === 0) cls = "off";
+      else if (mult < 1) cls = "reduced";
+
+      const cell = document.createElement("div");
+      cell.className = "cal-week " + cls;
+      cell.innerHTML = `
+        <div class="cal-week-num">SEM ${week}</div>
+        <div class="cal-week-pct">${pct}%</div>
+        <div class="cal-week-reason">${exc?.reason ?? ""}</div>`;
+      grid.appendChild(cell);
+    }
+    setStatus("calStatus", "Listo.");
+  } catch (e) { setStatus("calStatus", e.message, true); }
+});
+
+/* ── Requerimientos ───────────────────────────────────────── */
 
 qs("btnCalcReq").addEventListener("click", async () => {
   try {
     const orderId = val("reqOrder");
-    if (!orderId) { setStatus("reqStatus", "Select an order first.", true); return; }
-    setStatus("reqStatus", "Calculating…");
+    if (!orderId) { setStatus("reqStatus", "Selecciona un pedido.", true); return; }
+    setStatus("reqStatus", "Calculando…");
     const data = await api(`/orders/${orderId}/requirements`);
 
     if (data.error) {
       setStatus("reqStatus", data.error, true);
-      qs("reqSummary").innerHTML = "";
+      qs("reqSummary").style.display = "none";
       qs("reqBody").innerHTML = "";
       return;
     }
 
-    setStatus("reqStatus", "Done.");
-    qs("reqSummary").innerHTML = `
-      <strong>Order #${data.order_id}</strong> —
-      Customer: ${data.customer_name} |
-      Qty: ${data.quantity_requested} |
-      Entry team: ${data.entry_team} |
-      Requested delivery: ${data.requested_delivery_date ?? "—"} |
-      Calculated delivery: ${data.calculated_delivery_date ?? "— (run planning first)"}<br>
-      <span class="highlight">Total raw material needed at top of chain: ${data.total_raw_material_needed}</span>`;
+    setStatus("reqStatus", "Listo.");
+    const summary = qs("reqSummary");
+    summary.style.display = "block";
+    summary.innerHTML = `
+      Pedido #${data.order_id} — ${data.customer_name} · ${data.quantity_requested} ton · entra en ${data.entry_team}<br>
+      F. solicitada: ${data.requested_delivery_date ?? "—"} · F. calculada: ${data.calculated_delivery_date ?? "— (ejecuta la planeación)"}<br>
+      <span class="big-num">${data.total_raw_material_needed}</span> ton de materia prima requeridas en total`;
 
     const body = qs("reqBody");
     body.innerHTML = "";
     data.steps.forEach(s => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${s.team_name}</td>
-        <td>${s.sequence_order}</td>
-        <td>${s.output_needed}</td>
-        <td>${s.input_needed ?? "—"}</td>
-        <td>${s.efficiency}</td>
-        <td>${s.monthly_capacity}</td>
-        <td>${s.weekly_capacity}</td>`;
+        <td>${s.team_name}</td><td class="num">${s.sequence_order}</td>
+        <td class="num">${s.output_needed}</td><td class="num">${s.input_needed ?? "—"}</td>
+        <td class="num">${s.efficiency}</td><td class="num">${s.monthly_capacity}</td><td class="num">${s.weekly_capacity}</td>`;
       body.appendChild(tr);
     });
   } catch (e) { setStatus("reqStatus", e.message, true); }
 });
 
-/* ── Monthly Planning ─────────────────────────────────────── */
+/* ── Planeación ───────────────────────────────────────────── */
 
 qs("btnRunPlanning").addEventListener("click", async () => {
   try {
-    const year = val("planYear");
-    const month = val("planMonth");
-    setStatus("planStatus", "Running planning…");
+    const year = val("planYear"), month = val("planMonth");
+    setStatus("planStatus", "Ejecutando…");
     const data = await api(`/planning/run?year=${year}&month=${month}`, { method: "POST" });
 
-    setStatus("planStatus", `Done. ${data.orders_planned} order(s) planned.`);
-    qs("planSummary").innerHTML = `
-      <strong>Planning run for ${data.planning_year}-${String(data.planning_month).padStart(2,"0")}</strong><br>
-      Orders planned: ${data.orders_planned}`;
+    setStatus("planStatus", `Listo. ${data.orders_planned} pedido(s) planeado(s).`);
+    const summary = qs("planSummary");
+    summary.style.display = "block";
+    summary.innerHTML = `Planeación ${data.planning_year}-${String(data.planning_month).padStart(2,"0")} — <span class="big-num">${data.orders_planned}</span> pedidos`;
 
     const body = qs("planBody");
     body.innerHTML = "";
     data.results.forEach(r => {
       const tr = document.createElement("tr");
       if (r.error) {
-        tr.innerHTML = `
-          <td>${r.order_id}</td>
-          <td>${r.customer_name ?? "—"}</td>
-          <td colspan="3" class="warn">${r.error}</td>`;
+        tr.innerHTML = `<td>${r.order_id}</td><td>${r.customer_name ?? "—"}</td><td colspan="3" class="danger-text">${r.error}</td>`;
       } else {
-        let lateLabel = "—";
-        if (r.is_late === true) lateLabel = '<span class="warn">LATE</span>';
-        else if (r.is_late === false) lateLabel = '<span class="highlight">On time</span>';
+        let statusLabel = "—";
+        if (r.is_late === true) statusLabel = '<span class="warn-text">ATRASADO</span>';
+        else if (r.is_late === false) statusLabel = '<span class="highlight">A tiempo</span>';
         tr.innerHTML = `
-          <td>${r.order_id}</td>
-          <td>${r.customer_name}</td>
-          <td>${r.requested_delivery_date ?? "—"}</td>
-          <td>${r.calculated_delivery_date}</td>
-          <td>${lateLabel}</td>`;
+          <td>${r.order_id}</td><td>${r.customer_name}</td>
+          <td>${r.requested_delivery_date ?? "—"}</td><td>${r.calculated_delivery_date}</td>
+          <td>${statusLabel}</td>`;
       }
       body.appendChild(tr);
     });
   } catch (e) { setStatus("planStatus", e.message, true); }
 });
 
-/* ── Occupancy ────────────────────────────────────────────── */
+/* ── Ocupación (todos los equipos) ────────────────────────── */
 
 qs("btnGetOccupancy").addEventListener("click", async () => {
   try {
-    const teamId = val("occTeam");
-    const year = val("occYear");
-    const month = val("occMonth");
-    if (!teamId) { setStatus("occStatus", "Select a team first.", true); return; }
-    setStatus("occStatus", "Loading…");
-    const data = await api(`/teams/${teamId}/occupancy?year=${year}&month=${month}`);
+    const year = val("occYear"), month = val("occMonth");
+    setStatus("occStatus", "Cargando…");
 
-    setStatus("occStatus", "Done.");
-    qs("occSummary").innerHTML = `
-      <strong>${data.team_name}</strong> — ${data.year}-${String(data.month).padStart(2,"0")}<br>
-      Overall occupancy: <span class="highlight">${data.overall_occupancy_pct ?? "—"}%</span>`;
+    const teams = await api("/teams");
+    const container = qs("occAllTeams");
+    container.innerHTML = "";
 
-    const chart = qs("occChart");
-    chart.innerHTML = "";
-    data.weekly_breakdown.forEach(w => {
-      const pct = w.occupancy_pct ?? 0;
-      const displayPct = Math.min(pct, 100);
-      const overClass = pct > 100 ? "over" : "";
-      const reasonLabel = w.reason ? ` <span class="warn">(${w.reason})</span>` : "";
-      const row = document.createElement("div");
-      row.className = "occ-bar-row";
-      row.innerHTML = `
-        <div class="occ-label">Week ${w.week_number}</div>
-        <div class="occ-track">
-          <div class="occ-fill ${overClass}" style="width:${displayPct}%">${pct}%</div>
-        </div>
-        <div style="font-size:.8rem; color:#888;">${reasonLabel}</div>`;
-      chart.appendChild(row);
-    });
+    for (const team of teams) {
+      const data = await api(`/teams/${team.id}/occupancy?year=${year}&month=${month}`);
+
+      const block = document.createElement("div");
+      block.className = "occ-team-block";
+      let rowsHtml = "";
+      data.weekly_breakdown.forEach(w => {
+        const pct = w.occupancy_pct ?? 0;
+        const displayPct = Math.min(pct, 100);
+        let fillClass = "";
+        if (pct > 100) fillClass = "over";
+        else if (w.capacity_multiplier < 1) fillClass = "holiday";
+        rowsHtml += `
+          <div class="occ-bar-row">
+            <div class="occ-week-label">SEM ${w.week_number}</div>
+            <div class="occ-track"><div class="occ-fill ${fillClass}" style="width:${displayPct}%">${pct}%</div></div>
+            <div class="occ-reason">${w.reason ?? ""}</div>
+          </div>`;
+      });
+      block.innerHTML = `
+        <div class="occ-team-name">${data.team_name} <span style="color:var(--text-faint); font-weight:400;">— ${data.overall_occupancy_pct ?? "—"}% promedio</span></div>
+        ${rowsHtml}`;
+      container.appendChild(block);
+    }
+    setStatus("occStatus", "Listo.");
   } catch (e) { setStatus("occStatus", e.message, true); }
 });
 
