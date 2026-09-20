@@ -154,6 +154,11 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
     Writes calculated_delivery_date back onto each Order, and commits
     CapacityAllocation rows so the run's effects are persisted, not just
     returned.
+
+    Idempotent: re-running for the same month first clears any
+    CapacityAllocation rows previously committed by an earlier run for
+    that month's orders, so re-running produces the same result rather
+    than stacking duplicate allocations on top of the old ones.
     """
     orders = (
         db.query(models.Order)
@@ -164,6 +169,13 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
         .order_by(models.Order.requested_delivery_date.asc().nullslast())
         .all()
     )
+
+    order_ids = [o.id for o in orders]
+    if order_ids:
+        db.query(models.CapacityAllocation).filter(
+            models.CapacityAllocation.order_id.in_(order_ids)
+        ).delete(synchronize_session=False)
+        db.flush()
 
     results = []
 

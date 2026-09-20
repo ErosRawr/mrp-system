@@ -135,6 +135,85 @@ def list_orders(db: Session = Depends(get_db)):
     return db.query(models.Order).order_by(models.Order.order_date).all()
 
 
+@app.put("/orders/{order_id}")
+def update_order(
+    order_id: int,
+    customer_name: str = None,
+    quantity_requested: float = None,
+    entry_team_id: int = None,
+    order_date: date = None,
+    requested_delivery_date: date = None,
+    planning_year: int = None,
+    planning_month: int = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Updates any subset of an order's fields. Since a prior planning run's
+    CapacityAllocation rows and calculated_delivery_date reflect the OLD
+    values, any edit clears both -- the order reverts to "not yet planned"
+    until the monthly planning run is executed again.
+    """
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    if quantity_requested is not None:
+        if quantity_requested <= 0:
+            raise HTTPException(400, "quantity_requested must be greater than 0")
+        order.quantity_requested = quantity_requested
+
+    if entry_team_id is not None:
+        entry_team = db.query(models.Team).filter(models.Team.id == entry_team_id).first()
+        if not entry_team:
+            raise HTTPException(400, f"No team exists with id {entry_team_id}")
+        order.entry_team_id = entry_team_id
+
+    if customer_name is not None:
+        order.customer_name = customer_name
+    if order_date is not None:
+        order.order_date = order_date
+    if requested_delivery_date is not None:
+        order.requested_delivery_date = requested_delivery_date
+    if planning_year is not None:
+        order.planning_year = planning_year
+    if planning_month is not None:
+        order.planning_month = planning_month
+
+    final_order_date = order_date if order_date is not None else order.order_date
+    final_due_date = requested_delivery_date if requested_delivery_date is not None else order.requested_delivery_date
+    if final_due_date and final_due_date < final_order_date:
+        raise HTTPException(400, "requested_delivery_date cannot be before order_date")
+
+    # Clear stale planning results -- any past CapacityAllocation for this
+    # order no longer reflects its current quantity/team/dates.
+    db.query(models.CapacityAllocation).filter(
+        models.CapacityAllocation.order_id == order_id
+    ).delete(synchronize_session=False)
+    order.calculated_delivery_date = None
+
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@app.delete("/orders/{order_id}")
+def delete_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    # Clean up any CapacityAllocation rows this order claimed, so deleting
+    # an order actually frees the capacity for other orders on re-planning.
+    db.query(models.CapacityAllocation).filter(
+        models.CapacityAllocation.order_id == order_id
+    ).delete(synchronize_session=False)
+
+    db.delete(order)
+    db.commit()
+    return {"status": "deleted", "id": order_id}
+
+
 @app.post("/team-week-exceptions")
 def set_week_exception(
     team_id: int,
@@ -144,6 +223,11 @@ def set_week_exception(
     reason: str = None,
     db: Session = Depends(get_db),
 ):
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+    if not team:
+        raise HTTPException(400, f"No team exists with id {team_id} -- check GET /teams for valid ids")
+    if not (1 <= week_number <= 53):
+        raise HTTPException(400, "week_number must be between 1 and 53 (ISO week numbering)")
     if not (0 <= capacity_multiplier <= 1):
         raise HTTPException(400, "capacity_multiplier must be between 0 and 1")
 
@@ -184,7 +268,7 @@ def delete_week_exception(exception_id: int, db: Session = Depends(get_db)):
         models.TeamWeekException.id == exception_id
     ).first()
     if not entry:
-        return {"error": "Exception not found"}
+        raise HTTPException(404, "Exception not found")
     db.delete(entry)
     db.commit()
     return {"status": "deleted", "id": exception_id}
@@ -211,6 +295,8 @@ def import_mexican_holidays(
     team = db.query(models.Team).filter(models.Team.id == team_id).first()
     if not team:
         raise HTTPException(404, "Team not found")
+    if not (1970 <= year <= 2200):
+        raise HTTPException(400, "year must be a realistic calendar year (1970-2200)")
     if working_days_per_week <= 0:
         raise HTTPException(400, "working_days_per_week must be greater than 0")
 
