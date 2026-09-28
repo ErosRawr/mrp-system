@@ -1,123 +1,157 @@
 """
-Seed the MRP system with test data via the running HTTP API, using the
-professor's own worked example (4 teams, tonnage figures) plus enough
-same-month orders on the bottleneck team to actually exercise weekly
-capacity contention during the planning run.
+Seed a full year of realistic demo data: the professor's own team
+numbers, plus ~100 orders spread across all 12 months (all 4 quarters),
+with randomized-but-plausible quantities and requested delivery dates,
+then runs the monthly planning batch for every month so the dashboard,
+quarterly charts, and occupancy views all have real data to show.
+
+This is separate from seed_data.py (which is the small, deterministic
+scenario used to verify the FIFO/contention logic in isolation) --
+this script is specifically for producing a rich, demo-ready dataset.
 
 Usage:
     1. Start the backend:  uvicorn main:app --reload
-    2. Run this script:    python seed_data.py
+    2. Run this script:    python seed_demo_data.py
 """
 
+import random
 import requests
 from datetime import date, timedelta
 
 BASE = "http://localhost:8000"
 
-counts = {"teams": 0, "orders": 0}
+random.seed(42)  # reproducible demo data -- same run every time
+
+counts = {"teams": 0, "orders": 0, "months_planned": 0}
 
 
-def post(path, params, label):
+def post(path, params, label=None, quiet=False):
     try:
         r = requests.post(f"{BASE}{path}", params=params)
         r.raise_for_status()
         data = r.json()
-        print(f"  {label}: OK")
+        if label and not quiet:
+            print(f"  {label}: OK")
         return data
     except Exception as e:
         resp = getattr(e, "response", None)
         if resp is not None:
-            print(f"  {label}: FAILED {resp.status_code} -- {resp.text}")
+            print(f"  {label or path}: FAILED {resp.status_code} -- {resp.text}")
         else:
-            print(f"  {label}: FAILED -- {e}")
+            print(f"  {label or path}: FAILED -- {e}")
         return None
 
 
-# -- 1. Teams -- matches the professor's worked example exactly, except
-# Equipo 4's monthly_capacity is deliberately lowered so a handful of
-# same-month orders create visible weekly contention during planning.
+# -- 1. Teams -- exactly the professor's worked example --
 
 TEAMS = [
     {"name": "Equipo 1", "sequence_order": 1, "monthly_capacity": 100000, "efficiency": 0.98},
     {"name": "Equipo 2", "sequence_order": 2, "monthly_capacity": 80000,  "efficiency": 0.95},
     {"name": "Equipo 3", "sequence_order": 3, "monthly_capacity": 80000,  "efficiency": 0.92},
-    {"name": "Equipo 4", "sequence_order": 4, "monthly_capacity": 4000,   "efficiency": 0.96},
-    # Equipo 4: 4000 tons/month over 4 weeks = 1000 tons/week bottleneck,
-    # deliberately tight so several ~1200-ton orders visibly queue up.
+    {"name": "Equipo 4", "sequence_order": 4, "monthly_capacity": 50000,  "efficiency": 0.96},
 ]
 
-print("Creating teams ...")
+print("Creando equipos...")
 team_ids = {}
 for t in TEAMS:
-    data = post("/teams", t, f"Created team: {t['name']}")
+    data = post("/teams", t, f"Equipo creado: {t['name']}")
     if data:
         team_ids[t["name"]] = data["id"]
         counts["teams"] += 1
 
 print()
 
-# -- 2. Orders -- several orders in the same planning month, entering at
-# Equipo 4 (the bottleneck), with staggered requested delivery dates so
-# the planning run's priority-sorting behavior is visible: orders with
-# earlier requested dates should get earlier weeks of capacity.
+# -- 2. Import Mexican holidays for every team for 2026 --
 
-PLANNING_YEAR = 2026
-PLANNING_MONTH = 9
-order_date = date(PLANNING_YEAR, PLANNING_MONTH, 1)
-
-ORDERS = [
-    {"customer_name": "Cliente C (requests late)",   "quantity_requested": 1200,
-     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 25).isoformat()},
-    {"customer_name": "Cliente A (requests early)",  "quantity_requested": 1200,
-     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 10).isoformat()},
-    {"customer_name": "Cliente B (requests middle)", "quantity_requested": 1200,
-     "requested_delivery_date": date(PLANNING_YEAR, PLANNING_MONTH, 18).isoformat()},
-]
-
-print("Creating orders ...")
-order_ids = []
-for o in ORDERS:
-    params = {
-        "customer_name": o["customer_name"],
-        "quantity_requested": o["quantity_requested"],
-        "entry_team_id": team_ids.get("Equipo 4"),
-        "order_date": order_date.isoformat(),
-        "requested_delivery_date": o["requested_delivery_date"],
-        "planning_year": PLANNING_YEAR,
-        "planning_month": PLANNING_MONTH,
-    }
-    data = post("/orders", params, f"Order for {o['customer_name']} (qty {o['quantity_requested']})")
-    if data:
-        order_ids.append(data["id"])
-        counts["orders"] += 1
+print("Importando dias festivos mexicanos 2026 para cada equipo...")
+for name, tid in team_ids.items():
+    post("/team-week-exceptions/import-mexican-holidays",
+         {"team_id": tid, "year": 2026}, f"{name}: festivos importados", quiet=True)
 
 print()
 
-# -- 3. Run the monthly planning batch --
+# -- 3. ~100 orders spread across all 12 months of 2026 --
+# Entry team is randomized across teams so different orders exercise
+# different parts of the chain -- some orders only need the last team,
+# some need the whole route. Quantities vary so some months are light
+# and some push close to capacity (visible in the dashboard/occupancy).
 
-print(f"Running monthly planning for {PLANNING_YEAR}-{PLANNING_MONTH:02d} ...")
-try:
-    r = requests.post(f"{BASE}/planning/run", params={"year": PLANNING_YEAR, "month": PLANNING_MONTH})
-    r.raise_for_status()
-    result = r.json()
-    print(f"  Orders planned: {result['orders_planned']}")
-    for entry in result["results"]:
-        if "error" in entry:
-            print(f"  Order {entry['order_id']} ({entry.get('customer_name')}): ERROR -- {entry['error']}")
+CUSTOMER_NAMES = [
+    "Aceros del Norte", "Construcciones Monclova", "Grupo Ferroindustrial",
+    "Metalurgica Coahuila", "Industrias Saltillo", "Perfiles del Bravo",
+    "Aceros Torreon", "Constructora Regiomontana", "Fundidora del Centro",
+    "Acero y Forja SA", "Metales Especializados", "Grupo Siderurgico MX",
+    "Estructuras del Norte", "Laminados Industriales", "Perfilados Coahuila",
+]
+
+YEAR = 2026
+TEAM_NAMES = list(team_ids.keys())
+
+print("Creando ~100 pedidos distribuidos en los 12 meses del 2026...")
+order_ids = []
+orders_per_month_target = 8  # ~8/month x 12 = ~96 orders
+
+for month in range(1, 13):
+    for _ in range(orders_per_month_target):
+        entry_team_name = random.choice(TEAM_NAMES)
+        # Bias quantities toward Equipo 4's realistic weekly scale (~12,500)
+        # so orders entering there create visible contention; orders
+        # entering earlier teams can be larger since those teams have
+        # much higher capacity.
+        if entry_team_name == "Equipo 4":
+            qty = random.randint(800, 3000)
+        elif entry_team_name in ("Equipo 2", "Equipo 3"):
+            qty = random.randint(1000, 5000)
         else:
-            late_flag = " [LATE]" if entry["is_late"] else ""
-            print(f"  {entry['customer_name']}: requested={entry['requested_delivery_date']}, "
-                  f"calculated={entry['calculated_delivery_date']}{late_flag}")
-except Exception as e:
-    print(f"  Planning run FAILED -- {e}")
+            qty = random.randint(1500, 8000)
+
+        order_day = random.randint(1, 25)  # leave room for delivery date to stay in-month-ish
+        order_date = date(YEAR, month, order_day)
+
+        # Requested delivery: somewhere between 5 and 25 days after order_date
+        requested_delivery = order_date + timedelta(days=random.randint(5, 25))
+
+        customer = random.choice(CUSTOMER_NAMES)
+
+        params = {
+            "customer_name": customer,
+            "quantity_requested": qty,
+            "entry_team_id": team_ids[entry_team_name],
+            "order_date": order_date.isoformat(),
+            "requested_delivery_date": requested_delivery.isoformat(),
+            "planning_year": YEAR,
+            "planning_month": month,
+        }
+        data = post("/orders", params, quiet=True)
+        if data:
+            order_ids.append(data["id"])
+            counts["orders"] += 1
+
+print(f"  {counts['orders']} pedidos creados.")
+print()
+
+# -- 4. Run monthly planning for every month that has orders --
+
+print("Ejecutando planeacion mensual para cada mes...")
+for month in range(1, 13):
+    r = requests.post(f"{BASE}/planning/run", params={"year": YEAR, "month": month})
+    if r.status_code == 200:
+        result = r.json()
+        if result["orders_planned"] > 0:
+            late_count = sum(1 for x in result["results"] if x.get("is_late") is True)
+            print(f"  {YEAR}-{month:02d}: {result['orders_planned']} pedidos planeados, {late_count} atrasados")
+            counts["months_planned"] += 1
+    else:
+        print(f"  {YEAR}-{month:02d}: FAILED -- {r.status_code} {r.text}")
 
 print()
 
 # -- Summary --
 
-print("--- Seed complete ---")
-print(f"Teams:  {counts['teams']} created")
-print(f"Orders: {counts['orders']} created")
+print("--- Seed completo ---")
+print(f"Equipos:          {counts['teams']}")
+print(f"Pedidos:          {counts['orders']}")
+print(f"Meses planeados:  {counts['months_planned']}")
 print()
-print("Check GET /teams/{id}/capacity-allocations to see the weekly ledger,")
-print(f"or GET /teams/{{id}}/occupancy?year={PLANNING_YEAR}&month={PLANNING_MONTH} for the occupancy chart data.")
+print("El dashboard, las graficas trimestrales, el calendario y la vista")
+print("de ocupacion ahora tienen datos reales distribuidos en todo el 2026.")

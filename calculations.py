@@ -12,12 +12,10 @@ def calculate_material_requirements(order_id: int, db: Session):
     scheduling. Given the current team chain and their efficiencies, it
     answers: "how much must each upstream team produce?"
 
-    Capacity- and calendar-aware delivery date planning is handled
-    separately by the weekly batch planning run (see planning.py), since
-    the spec treats material requirements and delivery-date scheduling as
-    distinct steps: registering an order computes requirements immediately,
-    while delivery dates are only computed when the monthly planning run
-    executes across all of that month's orders together.
+    Note: only teams with sequence_order <= the order's entry team are
+    included -- e.g. an order entering at team #2 of 4 will correctly
+    show only teams #1 and #2, not all four. This is intentional: teams
+    downstream of the entry point are not part of that order's route.
     """
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:

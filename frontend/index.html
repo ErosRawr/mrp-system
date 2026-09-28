@@ -258,6 +258,37 @@
   .chart-title { font-size: .78rem; color: var(--text-dim); margin-bottom: .8rem; }
   .chart-legend { display: flex; gap: 1.2rem; margin-top: .6rem; font-size: .72rem; color: var(--text-dim); }
   .chart-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+
+  /* ── Row overflow menu ────────────────────────────────────── */
+  .menu-trigger { padding: .2rem .55rem; font-size: 1rem; line-height: 1; }
+  .row-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10;
+    min-width: 110px;
+  }
+  .row-menu.open { display: block; }
+  .row-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: .5rem .8rem;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: .8rem;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .row-menu button:hover { background: var(--bg); }
+  .row-menu button.danger { color: var(--danger); }
   .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 </style>
 </head>
@@ -461,6 +492,11 @@
 
     <div class="summary-box" id="reqSummary" style="display:none;"></div>
 
+    <div class="chart-block" id="reqDiagramBlock" style="display:none;">
+      <div class="chart-title">Ruta de proceso — flujo de material</div>
+      <div id="reqDiagram"></div>
+    </div>
+
     <table>
       <thead>
         <tr>
@@ -622,6 +658,20 @@ qs("btnCreateTeam").addEventListener("click", async () => {
 
 let editingOrderId = null;
 
+function closeAllRowMenus() {
+  document.querySelectorAll(".row-menu.open").forEach(m => m.classList.remove("open"));
+}
+
+function toggleOrderMenu(event, orderId) {
+  event.stopPropagation();
+  const menu = qs(`menu-order-${orderId}`);
+  const wasOpen = menu.classList.contains("open");
+  closeAllRowMenus();
+  if (!wasOpen) menu.classList.add("open");
+}
+
+document.addEventListener("click", closeAllRowMenus);
+
 async function loadOrders() {
   const orders = await api("/orders");
   const body = qs("ordersBody");
@@ -634,9 +684,12 @@ async function loadOrders() {
       <td>${o.requested_delivery_date ?? "—"}</td>
       <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
       <td>${o.calculated_delivery_date ?? "—"}</td>
-      <td>
-        <button class="btn small" onclick="startEditOrder(${o.id})">Editar</button>
-        <button class="btn small" style="border-color:var(--danger); color:var(--danger); background:transparent;" onclick="deleteOrderRow(${o.id})">Eliminar</button>
+      <td style="position:relative;">
+        <button class="btn small menu-trigger" onclick="toggleOrderMenu(event, ${o.id})">⋯</button>
+        <div class="row-menu" id="menu-order-${o.id}">
+          <button onclick="startEditOrder(${o.id}); closeAllRowMenus();">Editar</button>
+          <button class="danger" onclick="deleteOrderRow(${o.id}); closeAllRowMenus();">Eliminar</button>
+        </div>
       </td>`;
     body.appendChild(tr);
   });
@@ -797,6 +850,71 @@ qs("btnLoadCalendar").addEventListener("click", async () => {
 
 /* ── Requerimientos ───────────────────────────────────────── */
 
+function renderRouteDiagram(steps, totalRawMaterial, containerId) {
+  // steps comes in entry-team-first order (downstream to upstream);
+  // for a left-to-right production diagram we want upstream-first.
+  const production = [...steps].reverse();
+
+  const boxWidth = 150, boxHeight = 70, gap = 60;
+  const totalBoxes = production.length + 1; // +1 for the final "Embarque" output box
+  const width = totalBoxes * boxWidth + (totalBoxes - 1) * gap + 40;
+  const height = 160;
+  const y = 40;
+
+  let svg = "";
+  let x = 20;
+
+  production.forEach((s, i) => {
+    const hasError = !!s.error;
+    const fillColor = hasError ? "#2a1c1c" : "#1d2226";
+    const strokeColor = hasError ? "#d9695a" : "#4a9eda";
+
+    svg += `
+      <g>
+        <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
+              fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" />
+        <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
+              font-size="13" font-family="-apple-system, sans-serif" font-weight="600">${s.team_name}</text>
+        <text x="${x + boxWidth/2}" y="${y + 44}" text-anchor="middle" fill="#4a9eda"
+              font-size="12" font-family="ui-monospace, monospace">salida: ${s.output_needed}</text>
+        <text x="${x + boxWidth/2}" y="${y + 60}" text-anchor="middle" fill="#838d94"
+              font-size="11" font-family="ui-monospace, monospace">rend. ${s.efficiency}</text>
+      </g>`;
+
+    if (i < production.length - 1 || true) {
+      const arrowX1 = x + boxWidth;
+      const arrowX2 = x + boxWidth + gap;
+      const arrowY = y + boxHeight / 2;
+      svg += `
+        <line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - 8}" y2="${arrowY}" stroke="#5a636a" stroke-width="1.5" />
+        <polygon points="${arrowX2-8},${arrowY-5} ${arrowX2},${arrowY} ${arrowX2-8},${arrowY+5}" fill="#5a636a" />`;
+    }
+
+    x += boxWidth + gap;
+  });
+
+  // Final "Embarque" (warehouse/output) box, showing what the customer receives
+  const lastStep = production[production.length - 1];
+  svg += `
+    <g>
+      <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
+            fill="#16241c" stroke="#5fb87a" stroke-width="1.5" />
+      <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
+            font-size="13" font-family="-apple-system, sans-serif" font-weight="600">Embarque</text>
+      <text x="${x + boxWidth/2}" y="${y + 46}" text-anchor="middle" fill="#5fb87a"
+            font-size="13" font-family="ui-monospace, monospace" font-weight="600">${lastStep.output_needed} ton</text>
+    </g>`;
+
+  qs(containerId).innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">
+      ${svg}
+    </svg>
+    <div style="font-size:.76rem; color:var(--text-faint); margin-top:.6rem;">
+      Flujo de izquierda a derecha: materia prima entra en Equipo 1, cada equipo consume
+      lo que produce el anterior segun su rendimiento, hasta llegar a Embarque.
+    </div>`;
+}
+
 qs("btnCalcReq").addEventListener("click", async () => {
   try {
     const orderId = val("reqOrder");
@@ -807,6 +925,7 @@ qs("btnCalcReq").addEventListener("click", async () => {
     if (data.error) {
       setStatus("reqStatus", data.error, true);
       qs("reqSummary").style.display = "none";
+      qs("reqDiagramBlock").style.display = "none";
       qs("reqBody").innerHTML = "";
       return;
     }
@@ -818,6 +937,9 @@ qs("btnCalcReq").addEventListener("click", async () => {
       Pedido #${data.order_id} — ${data.customer_name} · ${data.quantity_requested} ton · entra en ${data.entry_team}<br>
       F. solicitada: ${data.requested_delivery_date ?? "—"} · F. calculada: ${data.calculated_delivery_date ?? "— (ejecuta la planeación)"}<br>
       <span class="big-num">${data.total_raw_material_needed}</span> ton de materia prima requeridas en total`;
+
+    qs("reqDiagramBlock").style.display = "block";
+    renderRouteDiagram(data.steps, data.total_raw_material_needed, "reqDiagram");
 
     const body = qs("reqBody");
     body.innerHTML = "";
@@ -851,19 +973,101 @@ qs("btnRunPlanning").addEventListener("click", async () => {
       const tr = document.createElement("tr");
       if (r.error) {
         tr.innerHTML = `<td>${r.order_id}</td><td>${r.customer_name ?? "—"}</td><td colspan="3" class="danger-text">${r.error}</td>`;
-      } else {
-        let statusLabel = "—";
-        if (r.is_late === true) statusLabel = '<span class="warn-text">ATRASADO</span>';
-        else if (r.is_late === false) statusLabel = '<span class="highlight">A tiempo</span>';
-        tr.innerHTML = `
-          <td>${r.order_id}</td><td>${r.customer_name}</td>
-          <td>${r.requested_delivery_date ?? "—"}</td><td>${r.calculated_delivery_date}</td>
-          <td>${statusLabel}</td>`;
+        body.appendChild(tr);
+        return;
       }
+
+      let statusLabel = "—";
+      if (r.lateness_status === "critical") statusLabel = '<span class="danger-text">🔴 ATRASO CRÍTICO</span>';
+      else if (r.lateness_status === "warning") statusLabel = '<span class="warn-text">⚠ Atrasado</span>';
+      else if (r.lateness_status === "on_time") statusLabel = '<span class="highlight">A tiempo</span>';
+
+      tr.style.cursor = "pointer";
+      tr.innerHTML = `
+        <td>${r.order_id}</td><td>${r.customer_name}</td>
+        <td>${r.requested_delivery_date ?? "—"}</td><td>${r.calculated_delivery_date}</td>
+        <td>${statusLabel}</td>`;
+      tr.addEventListener("click", () => togglePlanRouteDiagram(r, tr));
       body.appendChild(tr);
     });
   } catch (e) { setStatus("planStatus", e.message, true); }
 });
+
+let openPlanDiagramRow = null;
+
+function togglePlanRouteDiagram(result, rowEl) {
+  const existing = rowEl.nextElementSibling;
+  if (existing && existing.classList.contains("plan-diagram-row")) {
+    existing.remove();
+    if (openPlanDiagramRow === rowEl) openPlanDiagramRow = null;
+    return;
+  }
+
+  // Close any other open diagram row first (one at a time keeps the table readable)
+  document.querySelectorAll(".plan-diagram-row").forEach(r => r.remove());
+
+  const diagramRow = document.createElement("tr");
+  diagramRow.className = "plan-diagram-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 5;
+  cell.innerHTML = `<div class="chart-block" style="margin:.6rem 0;">
+    <div class="chart-title">Ruta de proceso — pedido #${result.order_id}, semanas asignadas</div>
+    <div class="plan-diagram-target"></div>
+  </div>`;
+  diagramRow.appendChild(cell);
+  rowEl.insertAdjacentElement("afterend", diagramRow);
+
+  renderPlanWeekDiagram(result.team_schedule, cell.querySelector(".plan-diagram-target"));
+  openPlanDiagramRow = rowEl;
+}
+
+function renderPlanWeekDiagram(teamSchedule, container) {
+  const production = [...teamSchedule].reverse(); // upstream-first for left-to-right reading
+
+  const boxWidth = 160, boxHeight = 70, gap = 60;
+  const width = production.length * boxWidth + (production.length - 1) * gap + 40;
+  const height = 150;
+  const y = 30;
+
+  let svg = "";
+  let x = 20;
+
+  production.forEach((s, i) => {
+    const hasError = !!s.error;
+    const fillColor = hasError ? "#2a1c1c" : "#1d2226";
+    const strokeColor = hasError ? "#d9695a" : "#4a9eda";
+    const weekLabel = hasError ? "—" :
+      (s.weeks_elapsed === 1 ? `Sem ${s.breakdown?.[0]?.week_number ?? "?"}` :
+       `Sem ${s.breakdown?.[0]?.week_number ?? "?"}–${s.end_week}`);
+
+    svg += `
+      <g>
+        <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
+              fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" />
+        <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
+              font-size="13" font-family="-apple-system, sans-serif" font-weight="600">${s.team_name}</text>
+        <text x="${x + boxWidth/2}" y="${y + 44}" text-anchor="middle" fill="#4a9eda"
+              font-size="12" font-family="ui-monospace, monospace">${weekLabel}</text>
+        <text x="${x + boxWidth/2}" y="${y + 60}" text-anchor="middle" fill="#838d94"
+              font-size="10" font-family="ui-monospace, monospace">${s.fully_scheduled ? "completo" : "parcial"}</text>
+      </g>`;
+
+    if (i < production.length - 1) {
+      const arrowX1 = x + boxWidth;
+      const arrowX2 = x + boxWidth + gap;
+      const arrowY = y + boxHeight / 2;
+      svg += `
+        <line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - 8}" y2="${arrowY}" stroke="#5a636a" stroke-width="1.5" />
+        <polygon points="${arrowX2-8},${arrowY-5} ${arrowX2},${arrowY} ${arrowX2-8},${arrowY+5}" fill="#5a636a" />`;
+    }
+    x += boxWidth + gap;
+  });
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">
+      ${svg}
+    </svg>`;
+}
 
 /* ── Dashboard ────────────────────────────────────────────── */
 

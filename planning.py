@@ -52,29 +52,12 @@ def _already_allocated_this_week(team_id: int, year: int, week_number: int, db: 
     return sum(float(r.quantity_allocated) for r in rows)
 
 
-def _get_capacity_multiplier(team_id: int, year: int, week_number: int, db: Session) -> float:
-    """Returns the capacity_multiplier for this team/week, or 1.0 (full
-    capacity) if no exception has been set."""
-    exception = (
-        db.query(models.TeamWeekException)
-        .filter(
-            models.TeamWeekException.team_id == team_id,
-            models.TeamWeekException.year == year,
-            models.TeamWeekException.week_number == week_number,
-        )
-        .first()
-    )
-    return float(exception.capacity_multiplier) if exception else 1.0
-
-
 def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                            start_year: int, start_week: int, db: Session):
     """
     Walks forward week by week from (start_year, start_week), consuming
     whatever weekly capacity is left (after subtracting what other orders
-    already claimed for that team/week, AND scaling down for any
-    TeamWeekException such as a holiday or maintenance shutdown), until
-    quantity_needed is covered.
+    already claimed for that team/week), until quantity_needed is covered.
 
     Returns dict: {end_year, end_week, weeks_elapsed, breakdown, fully_scheduled}
     """
@@ -82,8 +65,8 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     if not team:
         return None
 
-    base_weekly_capacity = team.weekly_capacity
-    if base_weekly_capacity <= 0:
+    weekly_capacity = team.weekly_capacity
+    if weekly_capacity <= 0:
         return {
             "end_year": start_year,
             "end_week": start_week,
@@ -100,11 +83,8 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     max_iterations = 260  # ~5 years of weeks, safety cap
 
     while remaining_needed > 0 and weeks_elapsed < max_iterations:
-        multiplier = _get_capacity_multiplier(team_id, year, week, db)
-        effective_weekly_capacity = base_weekly_capacity * multiplier
-
         already_used = _already_allocated_this_week(team_id, year, week, db)
-        free_capacity = max(effective_weekly_capacity - already_used, 0.0)
+        free_capacity = max(weekly_capacity - already_used, 0.0)
 
         if free_capacity > 0:
             allocate_this_week = min(free_capacity, remaining_needed)
@@ -113,7 +93,6 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                 "week_number": week,
                 "allocated": round(allocate_this_week, 2),
                 "free_capacity_before": round(free_capacity, 2),
-                "capacity_multiplier": multiplier,
             })
 
             db.add(models.CapacityAllocation(
@@ -123,7 +102,10 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                 week_number=week,
                 quantity_allocated=allocate_this_week,
             ))
-            db.flush()
+            db.flush()  # make this allocation visible to subsequent queries
+                        # in the same session, BEFORE the final commit --
+                        # otherwise later orders in this same planning run
+                        # won't see earlier orders' claims and can over-allocate.
 
             remaining_needed -= allocate_this_week
 
@@ -154,11 +136,6 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
     Writes calculated_delivery_date back onto each Order, and commits
     CapacityAllocation rows so the run's effects are persisted, not just
     returned.
-
-    Idempotent: re-running for the same month first clears any
-    CapacityAllocation rows previously committed by an earlier run for
-    that month's orders, so re-running produces the same result rather
-    than stacking duplicate allocations on top of the old ones.
     """
     orders = (
         db.query(models.Order)
@@ -169,13 +146,6 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
         .order_by(models.Order.requested_delivery_date.asc().nullslast())
         .all()
     )
-
-    order_ids = [o.id for o in orders]
-    if order_ids:
-        db.query(models.CapacityAllocation).filter(
-            models.CapacityAllocation.order_id.in_(order_ids)
-        ).delete(synchronize_session=False)
-        db.flush()
 
     results = []
 
@@ -247,9 +217,22 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
         order.calculated_delivery_date = calculated_delivery_date
         db.add(order)
 
+        # Lateness tiers, per the professor's rule:
+        #   <= 7 days late (or early)  -> on time (within grace period)
+        #   8-14 days late             -> warning
+        #   > 14 days late             -> critical (red alert)
         is_late = None
+        lateness_status = None
+        days_late = None
         if order.requested_delivery_date:
-            is_late = calculated_delivery_date > order.requested_delivery_date
+            days_late = (calculated_delivery_date - order.requested_delivery_date).days
+            is_late = days_late > 7
+            if days_late <= 7:
+                lateness_status = "on_time"
+            elif days_late <= 14:
+                lateness_status = "warning"
+            else:
+                lateness_status = "critical"
 
         results.append({
             "order_id": order.id,
@@ -258,6 +241,8 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
             "requested_delivery_date": str(order.requested_delivery_date) if order.requested_delivery_date else None,
             "calculated_delivery_date": str(calculated_delivery_date),
             "is_late": is_late,
+            "days_late": days_late,
+            "lateness_status": lateness_status,
             "team_schedule": team_schedule_results,
         })
 
