@@ -1,296 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MRP — Ruta de Proceso</title>
-<style>
-  :root {
-    --bg: #0f1215;
-    --panel: #171b1f;
-    --panel-raised: #1d2226;
-    --border: #262c31;
-    --border-soft: #1e2328;
-    --text: #d7dbde;
-    --text-dim: #838d94;
-    --text-faint: #5a636a;
-    --accent: #4a9eda;
-    --accent-dim: #2d5f80;
-    --warn: #d99a4e;
-    --danger: #d9695a;
-    --good: #5fb87a;
-    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-    --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: var(--sans);
-    background: var(--bg);
-    color: var(--text);
-    display: flex;
-    min-height: 100vh;
-    font-size: 14px;
-  }
-
-  /* ── Sidebar ──────────────────────────────────────────────── */
-  .sidebar {
-    width: 210px;
-    flex-shrink: 0;
-    background: var(--panel);
-    border-right: 1px solid var(--border);
-    padding: 1.25rem 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .brand {
-    padding: 0 1.25rem 1rem;
-    border-bottom: 1px solid var(--border-soft);
-    margin-bottom: .75rem;
-  }
-  .brand-title { font-size: .95rem; font-weight: 600; color: #fff; letter-spacing: .01em; }
-  .brand-sub { font-size: .72rem; color: var(--text-faint); margin-top: .15rem; }
-
-  .nav-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: .55rem 1.25rem;
-    background: none;
-    border: none;
-    border-left: 2px solid transparent;
-    color: var(--text-dim);
-    font-size: .85rem;
-    cursor: pointer;
-    font-family: var(--sans);
-  }
-  .nav-item:hover { color: var(--text); background: var(--panel-raised); }
-  .nav-item.active {
-    color: #fff;
-    border-left-color: var(--accent);
-    background: var(--panel-raised);
-  }
-
-  /* ── Main content ─────────────────────────────────────────── */
-  .main {
-    flex: 1;
-    padding: 1.75rem 2rem;
-    max-width: 1100px;
-  }
-  .view { display: none; }
-  .view.active { display: block; }
-
-  h1 { font-size: 1.15rem; font-weight: 600; color: #fff; margin-bottom: .2rem; }
-  .view-desc { font-size: .82rem; color: var(--text-dim); margin-bottom: 1.25rem; max-width: 62ch; line-height: 1.5; }
-
-  /* ── Panels / forms ───────────────────────────────────────── */
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 1rem 1.1rem;
-    margin-bottom: 1.1rem;
-  }
-  .panel-title {
-    font-size: .72rem;
-    text-transform: none;
-    color: var(--text-faint);
-    margin-bottom: .7rem;
-    font-weight: 500;
-  }
-
-  .form-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .9rem;
-    align-items: flex-end;
-  }
-  .field { display: flex; flex-direction: column; gap: .3rem; }
-  .field label { font-size: .74rem; color: var(--text-dim); }
-  .field input, .field select {
-    padding: .4rem .5rem;
-    font-size: .84rem;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    font-family: var(--sans);
-    min-width: 130px;
-  }
-  .field input:focus, .field select:focus {
-    outline: none;
-    border-color: var(--accent-dim);
-  }
-  .field input[type=number] { font-family: var(--mono); }
-
-  button.btn {
-    padding: .45rem 1rem;
-    cursor: pointer;
-    background: var(--accent-dim);
-    color: #fff;
-    border: 1px solid var(--accent);
-    border-radius: 2px;
-    font-size: .84rem;
-    font-family: var(--sans);
-    height: 32px;
-  }
-  button.btn:hover { background: var(--accent); }
-  button.btn.small { padding: .25rem .6rem; font-size: .76rem; height: auto; }
-
-  .status { margin-top: .6rem; font-size: .78rem; color: var(--text-faint); }
-  .status.error { color: var(--danger); }
-
-  /* ── Tables ───────────────────────────────────────────────── */
-  table { border-collapse: collapse; width: 100%; font-size: .82rem; }
-  th, td {
-    padding: .45rem .6rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-soft);
-  }
-  th {
-    color: var(--text-faint);
-    font-weight: 500;
-    font-size: .72rem;
-    border-bottom: 1px solid var(--border);
-  }
-  td { color: var(--text); }
-  td.num, th.num { font-family: var(--mono); text-align: right; }
-  tr:hover td { background: var(--panel-raised); }
-
-  .highlight { color: var(--good); font-weight: 600; }
-  .warn-text { color: var(--warn); font-weight: 600; }
-  .danger-text { color: var(--danger); font-weight: 600; }
-
-  /* ── Summary box ──────────────────────────────────────────── */
-  .summary-box {
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: .8rem 1rem;
-    margin-bottom: 1rem;
-    font-size: .84rem;
-    line-height: 1.7;
-  }
-  .summary-box .big-num { font-family: var(--mono); font-size: 1.3rem; color: #fff; font-weight: 600; }
-
-  /* ── Occupancy bars ───────────────────────────────────────── */
-  .occ-team-block { margin-bottom: 1.4rem; }
-  .occ-team-name { font-size: .82rem; color: var(--text); margin-bottom: .5rem; font-weight: 600; }
-  .occ-bar-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .3rem; }
-  .occ-week-label { width: 70px; font-size: .72rem; color: var(--text-faint); font-family: var(--mono); flex-shrink: 0; }
-  .occ-track {
-    flex: 1;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    height: 18px;
-    overflow: hidden;
-    position: relative;
-  }
-  .occ-fill {
-    height: 100%;
-    background: var(--accent-dim);
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 6px;
-    font-size: .68rem;
-    color: #fff;
-    font-family: var(--mono);
-    white-space: nowrap;
-  }
-  .occ-fill.over { background: var(--danger); }
-  .occ-fill.holiday { background: var(--warn); }
-  .occ-reason { font-size: .72rem; color: var(--text-faint); width: 140px; flex-shrink: 0; }
-
-  /* ── Calendar ─────────────────────────────────────────────── */
-  .cal-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: .4rem;
-  }
-  .cal-week {
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: .5rem .6rem;
-    font-size: .74rem;
-  }
-  .cal-week.full { border-left: 2px solid var(--good); }
-  .cal-week.reduced { border-left: 2px solid var(--warn); }
-  .cal-week.off { border-left: 2px solid var(--danger); }
-  .cal-week-num { font-family: var(--mono); color: var(--text-dim); font-size: .7rem; }
-  .cal-week-pct { font-family: var(--mono); font-size: 1rem; color: #fff; margin: .2rem 0; }
-  .cal-week-reason { color: var(--text-faint); font-size: .68rem; line-height: 1.3; }
-
-  /* ── KPI cards ────────────────────────────────────────────── */
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: .8rem;
-    margin-bottom: 1.5rem;
-  }
-  .kpi-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-left: 2px solid var(--accent);
-    border-radius: 3px;
-    padding: .9rem 1rem;
-  }
-  .kpi-card.warn { border-left-color: var(--warn); }
-  .kpi-card.danger { border-left-color: var(--danger); }
-  .kpi-card.good { border-left-color: var(--good); }
-  .kpi-label { font-size: .72rem; color: var(--text-faint); margin-bottom: .4rem; }
-  .kpi-value { font-family: var(--mono); font-size: 1.6rem; color: #fff; font-weight: 600; line-height: 1; }
-  .kpi-sub { font-size: .72rem; color: var(--text-dim); margin-top: .35rem; }
-
-  .dash-section-title { font-size: .78rem; color: var(--text-dim); margin: 1.4rem 0 .6rem; font-weight: 600; }
-
-  /* ── Quarterly charts ─────────────────────────────────────── */
-  .chart-block {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 1rem 1.1rem;
-    margin-bottom: 1.1rem;
-  }
-  .chart-title { font-size: .78rem; color: var(--text-dim); margin-bottom: .8rem; }
-  .chart-legend { display: flex; gap: 1.2rem; margin-top: .6rem; font-size: .72rem; color: var(--text-dim); }
-  .chart-legend span { display: inline-flex; align-items: center; gap: .35rem; }
-
-  /* ── Row overflow menu ────────────────────────────────────── */
-  .menu-trigger { padding: .2rem .55rem; font-size: 1rem; line-height: 1; }
-  .row-menu {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 2px;
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    z-index: 10;
-    min-width: 110px;
-  }
-  .row-menu.open { display: block; }
-  .row-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: .5rem .8rem;
-    background: none;
-    border: none;
-    color: var(--text);
-    font-size: .8rem;
-    cursor: pointer;
-    font-family: var(--sans);
-  }
-  .row-menu button:hover { background: var(--bg); }
-  .row-menu button.danger { color: var(--danger); }
-  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MRP — Ruta de Proceso</title>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
@@ -306,6 +20,7 @@
   <button class="nav-item" data-view="calendar">Calendario</button>
   <button class="nav-item" data-view="requirements">Requerimientos</button>
   <button class="nav-item" data-view="planning">Planeación Mensual</button>
+  <button class="nav-item" data-view="heuristica">Heurística</button>
   <button class="nav-item" data-view="occupancy">Ocupación</button>
 </nav>
 
@@ -405,6 +120,24 @@
         <div class="field"><label>Equipo de entrada</label><select id="orderTeam"></select></div>
         <div class="field"><label>Fecha de pedido</label><input id="orderDate" type="date" /></div>
         <div class="field"><label>Fecha solicitada</label><input id="orderReqDate" type="date" /></div>
+        <div class="field"><label>Tipo de pedido</label>
+          <select id="orderTipo">
+            <option value="">—</option>
+            <option value="comercial">Comercial</option>
+            <option value="galvanizado">Galvanizado</option>
+            <option value="perfiles">Perfiles</option>
+            <option value="perfileros">Perfileros</option>
+            <option value="tuberia">Tubería</option>
+            <option value="ojalatero">Ojalatero</option>
+            <option value="especial">Especial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <label style="flex-direction:row; align-items:center; gap:.4rem; font-size:.84rem; color:var(--text);">
+            <input id="orderPriority" type="checkbox" style="min-width:auto; width:auto;" /> Prioritario
+          </label>
+        </div>
         <button class="btn" id="btnCreateOrder">Crear</button>
         <button class="btn" id="btnCancelEditOrder" style="display:none; background:transparent; border-color:var(--border);">Cancelar</button>
       </div>
@@ -416,6 +149,7 @@
         <tr>
           <th>ID</th><th>Cliente</th><th class="num">Ton</th>
           <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
+          <th>Tipo</th><th>Prior.</th>
           <th>Periodo</th><th>F. calculada</th><th></th>
         </tr>
       </thead>
@@ -492,11 +226,6 @@
 
     <div class="summary-box" id="reqSummary" style="display:none;"></div>
 
-    <div class="chart-block" id="reqDiagramBlock" style="display:none;">
-      <div class="chart-title">Ruta de proceso — flujo de material</div>
-      <div id="reqDiagram"></div>
-    </div>
-
     <table>
       <thead>
         <tr>
@@ -518,6 +247,14 @@
       <div class="form-row">
         <div class="field"><label>Año</label><input id="planYear" type="number" value="2026" /></div>
         <div class="field"><label>Mes</label><input id="planMonth" type="number" min="1" max="12" value="9" /></div>
+        <div class="field">
+          <label>Criterio</label>
+          <select id="planCriterion">
+            <option value="peps">PEPS (FIFO)</option>
+            <option value="prioritario">Prioritario</option>
+            <option value="heuristica">Heurística</option>
+          </select>
+        </div>
         <button class="btn" id="btnRunPlanning">Ejecutar planeación</button>
       </div>
       <div class="status" id="planStatus"></div>
@@ -534,6 +271,45 @@
       </thead>
       <tbody id="planBody"></tbody>
     </table>
+  </div>
+
+  <!-- HEURISTICA -->
+  <div class="view" id="view-heuristica">
+    <h1>Comparación de criterios</h1>
+    <p class="view-desc">
+      Compara cómo quedarían los pedidos del mes bajo tres estrategias distintas,
+      sin comprometer ninguna. PEPS ordena por fecha solicitada; Prioritario
+      adelanta los pedidos marcados como prioritarios; Heurística combina
+      prioridad, tonelaje (15,000+ ton ordena de forma continua) y tipo de
+      pedido (comercial primero, especial al final).
+    </p>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Año</label><input id="heurYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="heurMonth" type="number" min="1" max="12" value="9" /></div>
+        <button class="btn" id="btnCompareHeuristics">Comparar</button>
+      </div>
+      <div class="status" id="heurStatus"></div>
+    </div>
+
+    <div class="criteria-columns" id="criteriaColumns"></div>
+
+    <div class="panel" id="heurCommitPanel" style="display:none; margin-top:1.1rem;">
+      <div class="panel-title">Aplicar un criterio</div>
+      <div class="form-row">
+        <div class="field">
+          <label>Criterio a ejecutar</label>
+          <select id="heurCommitCriterion">
+            <option value="peps">PEPS (FIFO)</option>
+            <option value="prioritario">Prioritario</option>
+            <option value="heuristica">Heurística</option>
+          </select>
+        </div>
+        <button class="btn" id="btnCommitHeuristic">Ejecutar y guardar</button>
+      </div>
+      <div class="status" id="heurCommitStatus"></div>
+    </div>
   </div>
 
   <!-- OCUPACION -->
@@ -555,761 +331,17 @@
 
 </main>
 
-<script>
-const API = "http://localhost:8000";
-
-async function api(path, opts = {}) {
-  const res = await fetch(API + path, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function qs(id) { return document.getElementById(id); }
-function val(id) { return qs(id).value; }
-
-function setStatus(id, msg, isError = false) {
-  const el = qs(id);
-  el.textContent = msg;
-  el.className = "status" + (isError ? " error" : "");
-}
-
-document.querySelectorAll(".nav-item").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    btn.classList.add("active");
-    qs("view-" + btn.dataset.view).classList.add("active");
-    refresh(btn.dataset.view);
-  });
-});
-
-async function refresh(view) {
-  try {
-    if (view === "dashboard") await loadDashboard();
-    if (view === "teams") await loadTeams();
-    if (view === "orders") { await populateTeamDropdown("orderTeam"); await loadOrders(); }
-    if (view === "exceptions") {
-      await populateTeamDropdown("excTeam");
-      await populateTeamDropdown("holidayTeam");
-      await loadExceptions();
-    }
-    if (view === "calendar") await populateTeamDropdown("calTeam");
-    if (view === "requirements") await populateOrderDropdown("reqOrder");
-  } catch (e) { console.error(e); }
-}
-
-async function populateTeamDropdown(selectId) {
-  const teams = await api("/teams");
-  const sel = qs(selectId);
-  sel.innerHTML = "";
-  teams.forEach(t => {
-    const o = document.createElement("option");
-    o.value = t.id;
-    o.textContent = `${t.name} (#${t.id})`;
-    sel.appendChild(o);
-  });
-}
-
-async function populateOrderDropdown(selectId) {
-  const orders = await api("/orders");
-  const sel = qs(selectId);
-  sel.innerHTML = "";
-  orders.forEach(o => {
-    const opt = document.createElement("option");
-    opt.value = o.id;
-    opt.textContent = `#${o.id} — ${o.customer_name} (${o.quantity_requested})`;
-    sel.appendChild(opt);
-  });
-}
-
-/* ── Equipos ──────────────────────────────────────────────── */
-
-async function loadTeams() {
-  const teams = await api("/teams");
-  const body = qs("teamsBody");
-  body.innerHTML = "";
-  teams.forEach(t => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${t.id}</td><td>${t.name}</td><td class="num">${t.sequence_order}</td>
-      <td class="num">${t.monthly_capacity}</td><td class="num">${t.weeks_available}</td>
-      <td class="num">${t.weekly_capacity}</td><td class="num">${t.efficiency}</td>`;
-    body.appendChild(tr);
-  });
-}
-
-qs("btnCreateTeam").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      name: val("teamName"), sequence_order: val("teamSeq"),
-      monthly_capacity: val("teamCap"), weeks_available: val("teamWeeks"),
-      efficiency: val("teamEff"),
-    });
-    await api("/teams?" + params, { method: "POST" });
-    setStatus("teamStatus", "Equipo creado.");
-    await loadTeams();
-  } catch (e) { setStatus("teamStatus", e.message, true); }
-});
-
-/* ── Pedidos ──────────────────────────────────────────────── */
-
-let editingOrderId = null;
-
-function closeAllRowMenus() {
-  document.querySelectorAll(".row-menu.open").forEach(m => m.classList.remove("open"));
-}
-
-function toggleOrderMenu(event, orderId) {
-  event.stopPropagation();
-  const menu = qs(`menu-order-${orderId}`);
-  const wasOpen = menu.classList.contains("open");
-  closeAllRowMenus();
-  if (!wasOpen) menu.classList.add("open");
-}
-
-document.addEventListener("click", closeAllRowMenus);
-
-async function loadOrders() {
-  const orders = await api("/orders");
-  const body = qs("ordersBody");
-  body.innerHTML = "";
-  orders.forEach(o => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${o.id}</td><td>${o.customer_name}</td><td class="num">${o.quantity_requested}</td>
-      <td class="num">${o.entry_team_id}</td><td>${o.order_date}</td>
-      <td>${o.requested_delivery_date ?? "—"}</td>
-      <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
-      <td>${o.calculated_delivery_date ?? "—"}</td>
-      <td style="position:relative;">
-        <button class="btn small menu-trigger" onclick="toggleOrderMenu(event, ${o.id})">⋯</button>
-        <div class="row-menu" id="menu-order-${o.id}">
-          <button onclick="startEditOrder(${o.id}); closeAllRowMenus();">Editar</button>
-          <button class="danger" onclick="deleteOrderRow(${o.id}); closeAllRowMenus();">Eliminar</button>
-        </div>
-      </td>`;
-    body.appendChild(tr);
-  });
-}
-
-function startEditOrder(orderId) {
-  api(`/orders`).then(orders => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    editingOrderId = orderId;
-    qs("orderFormTitle").textContent = `Editando pedido #${orderId}`;
-    qs("orderCust").value = order.customer_name;
-    qs("orderQty").value = order.quantity_requested;
-    qs("orderTeam").value = order.entry_team_id;
-    qs("orderDate").value = order.order_date;
-    qs("orderReqDate").value = order.requested_delivery_date ?? "";
-    qs("btnCreateOrder").textContent = "Guardar cambios";
-    qs("btnCancelEditOrder").style.display = "inline-block";
-
-    if (order.calculated_delivery_date) {
-      setStatus("orderStatus", "Nota: este pedido ya fue planeado -- guardar cambios borrará su fecha calculada y requerirá volver a ejecutar la planeación.");
-    }
-  });
-}
-
-function cancelEditOrder() {
-  editingOrderId = null;
-  qs("orderFormTitle").textContent = "Nuevo pedido";
-  qs("orderCust").value = "";
-  qs("orderQty").value = "";
-  qs("orderDate").value = "";
-  qs("orderReqDate").value = "";
-  qs("btnCreateOrder").textContent = "Crear";
-  qs("btnCancelEditOrder").style.display = "none";
-  setStatus("orderStatus", "");
-}
-
-async function deleteOrderRow(orderId) {
-  try {
-    await api(`/orders/${orderId}`, { method: "DELETE" });
-    setStatus("orderStatus", `Pedido #${orderId} eliminado.`);
-    if (editingOrderId === orderId) cancelEditOrder();
-    await loadOrders();
-  } catch (e) { setStatus("orderStatus", e.message, true); }
-}
-
-qs("btnCancelEditOrder").addEventListener("click", cancelEditOrder);
-
-qs("btnCreateOrder").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      customer_name: val("orderCust"), quantity_requested: val("orderQty"),
-      entry_team_id: val("orderTeam"), order_date: val("orderDate"),
-    });
-    const reqDate = val("orderReqDate");
-    if (reqDate) params.set("requested_delivery_date", reqDate);
-
-    if (editingOrderId) {
-      await api(`/orders/${editingOrderId}?` + params, { method: "PUT" });
-      setStatus("orderStatus", `Pedido #${editingOrderId} actualizado.`);
-      cancelEditOrder();
-    } else {
-      await api("/orders?" + params, { method: "POST" });
-      setStatus("orderStatus", "Pedido creado.");
-    }
-    await loadOrders();
-  } catch (e) { setStatus("orderStatus", e.message, true); }
-});
-
-/* ── Disponibilidad ───────────────────────────────────────── */
-
-async function loadExceptions() {
-  const exceptions = await api("/team-week-exceptions");
-  const body = qs("excBody");
-  body.innerHTML = "";
-  exceptions.forEach(x => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${x.id}</td><td class="num">${x.team_id}</td><td class="num">${x.year}</td>
-      <td class="num">${x.week_number}</td><td class="num">${x.capacity_multiplier}</td>
-      <td>${x.reason ?? "—"}</td>
-      <td><button class="btn small" onclick="deleteException(${x.id})">Eliminar</button></td>`;
-    body.appendChild(tr);
-  });
-}
-
-qs("btnSetExc").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      team_id: val("excTeam"), year: val("excYear"), week_number: val("excWeek"),
-      capacity_multiplier: val("excMultiplier"),
-    });
-    const reason = val("excReason");
-    if (reason) params.set("reason", reason);
-    await api("/team-week-exceptions?" + params, { method: "POST" });
-    setStatus("excStatus", "Excepción guardada.");
-    await loadExceptions();
-  } catch (e) { setStatus("excStatus", e.message, true); }
-});
-
-async function deleteException(id) {
-  try {
-    await api(`/team-week-exceptions/${id}`, { method: "DELETE" });
-    await loadExceptions();
-  } catch (e) { setStatus("excStatus", e.message, true); }
-}
-
-qs("btnImportHolidays").addEventListener("click", async () => {
-  try {
-    const params = new URLSearchParams({
-      team_id: val("holidayTeam"), year: val("holidayYear"),
-      working_days_per_week: val("holidayWorkDays"),
-    });
-    setStatus("holidayStatus", "Importando…");
-    const data = await api("/team-week-exceptions/import-mexican-holidays?" + params, { method: "POST" });
-    setStatus("holidayStatus", `${data.holidays_imported} semana(s) festiva(s) importada(s).`);
-    await loadExceptions();
-  } catch (e) { setStatus("holidayStatus", e.message, true); }
-});
-
-/* ── Calendario ───────────────────────────────────────────── */
-
-qs("btnLoadCalendar").addEventListener("click", async () => {
-  try {
-    const teamId = val("calTeam");
-    const year = val("calYear");
-    if (!teamId) { setStatus("calStatus", "Selecciona un equipo.", true); return; }
-    setStatus("calStatus", "Cargando…");
-
-    const allExceptions = await api("/team-week-exceptions");
-    const teamExceptions = {};
-    allExceptions
-      .filter(x => String(x.team_id) === String(teamId) && String(x.year) === String(year))
-      .forEach(x => { teamExceptions[x.week_number] = x; });
-
-    const grid = qs("calGrid");
-    grid.innerHTML = "";
-    for (let week = 1; week <= 52; week++) {
-      const exc = teamExceptions[week];
-      const mult = exc ? parseFloat(exc.capacity_multiplier) : 1.0;
-      const pct = Math.round(mult * 100);
-      let cls = "full";
-      if (mult === 0) cls = "off";
-      else if (mult < 1) cls = "reduced";
-
-      const cell = document.createElement("div");
-      cell.className = "cal-week " + cls;
-      cell.innerHTML = `
-        <div class="cal-week-num">SEM ${week}</div>
-        <div class="cal-week-pct">${pct}%</div>
-        <div class="cal-week-reason">${exc?.reason ?? ""}</div>`;
-      grid.appendChild(cell);
-    }
-    setStatus("calStatus", "Listo.");
-  } catch (e) { setStatus("calStatus", e.message, true); }
-});
-
-/* ── Requerimientos ───────────────────────────────────────── */
-
-function renderRouteDiagram(steps, totalRawMaterial, containerId) {
-  // steps comes in entry-team-first order (downstream to upstream);
-  // for a left-to-right production diagram we want upstream-first.
-  const production = [...steps].reverse();
-
-  const boxWidth = 150, boxHeight = 70, gap = 60;
-  const totalBoxes = production.length + 1; // +1 for the final "Embarque" output box
-  const width = totalBoxes * boxWidth + (totalBoxes - 1) * gap + 40;
-  const height = 160;
-  const y = 40;
-
-  let svg = "";
-  let x = 20;
-
-  production.forEach((s, i) => {
-    const hasError = !!s.error;
-    const fillColor = hasError ? "#2a1c1c" : "#1d2226";
-    const strokeColor = hasError ? "#d9695a" : "#4a9eda";
-
-    svg += `
-      <g>
-        <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
-              fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" />
-        <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
-              font-size="13" font-family="-apple-system, sans-serif" font-weight="600">${s.team_name}</text>
-        <text x="${x + boxWidth/2}" y="${y + 44}" text-anchor="middle" fill="#4a9eda"
-              font-size="12" font-family="ui-monospace, monospace">salida: ${s.output_needed}</text>
-        <text x="${x + boxWidth/2}" y="${y + 60}" text-anchor="middle" fill="#838d94"
-              font-size="11" font-family="ui-monospace, monospace">rend. ${s.efficiency}</text>
-      </g>`;
-
-    if (i < production.length - 1 || true) {
-      const arrowX1 = x + boxWidth;
-      const arrowX2 = x + boxWidth + gap;
-      const arrowY = y + boxHeight / 2;
-      svg += `
-        <line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - 8}" y2="${arrowY}" stroke="#5a636a" stroke-width="1.5" />
-        <polygon points="${arrowX2-8},${arrowY-5} ${arrowX2},${arrowY} ${arrowX2-8},${arrowY+5}" fill="#5a636a" />`;
-    }
-
-    x += boxWidth + gap;
-  });
-
-  // Final "Embarque" (warehouse/output) box, showing what the customer receives
-  const lastStep = production[production.length - 1];
-  svg += `
-    <g>
-      <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
-            fill="#16241c" stroke="#5fb87a" stroke-width="1.5" />
-      <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
-            font-size="13" font-family="-apple-system, sans-serif" font-weight="600">Embarque</text>
-      <text x="${x + boxWidth/2}" y="${y + 46}" text-anchor="middle" fill="#5fb87a"
-            font-size="13" font-family="ui-monospace, monospace" font-weight="600">${lastStep.output_needed} ton</text>
-    </g>`;
-
-  qs(containerId).innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">
-      ${svg}
-    </svg>
-    <div style="font-size:.76rem; color:var(--text-faint); margin-top:.6rem;">
-      Flujo de izquierda a derecha: materia prima entra en Equipo 1, cada equipo consume
-      lo que produce el anterior segun su rendimiento, hasta llegar a Embarque.
-    </div>`;
-}
-
-qs("btnCalcReq").addEventListener("click", async () => {
-  try {
-    const orderId = val("reqOrder");
-    if (!orderId) { setStatus("reqStatus", "Selecciona un pedido.", true); return; }
-    setStatus("reqStatus", "Calculando…");
-    const data = await api(`/orders/${orderId}/requirements`);
-
-    if (data.error) {
-      setStatus("reqStatus", data.error, true);
-      qs("reqSummary").style.display = "none";
-      qs("reqDiagramBlock").style.display = "none";
-      qs("reqBody").innerHTML = "";
-      return;
-    }
-
-    setStatus("reqStatus", "Listo.");
-    const summary = qs("reqSummary");
-    summary.style.display = "block";
-    summary.innerHTML = `
-      Pedido #${data.order_id} — ${data.customer_name} · ${data.quantity_requested} ton · entra en ${data.entry_team}<br>
-      F. solicitada: ${data.requested_delivery_date ?? "—"} · F. calculada: ${data.calculated_delivery_date ?? "— (ejecuta la planeación)"}<br>
-      <span class="big-num">${data.total_raw_material_needed}</span> ton de materia prima requeridas en total`;
-
-    qs("reqDiagramBlock").style.display = "block";
-    renderRouteDiagram(data.steps, data.total_raw_material_needed, "reqDiagram");
-
-    const body = qs("reqBody");
-    body.innerHTML = "";
-    data.steps.forEach(s => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${s.team_name}</td><td class="num">${s.sequence_order}</td>
-        <td class="num">${s.output_needed}</td><td class="num">${s.input_needed ?? "—"}</td>
-        <td class="num">${s.efficiency}</td><td class="num">${s.monthly_capacity}</td><td class="num">${s.weekly_capacity}</td>`;
-      body.appendChild(tr);
-    });
-  } catch (e) { setStatus("reqStatus", e.message, true); }
-});
-
-/* ── Planeación ───────────────────────────────────────────── */
-
-qs("btnRunPlanning").addEventListener("click", async () => {
-  try {
-    const year = val("planYear"), month = val("planMonth");
-    setStatus("planStatus", "Ejecutando…");
-    const data = await api(`/planning/run?year=${year}&month=${month}`, { method: "POST" });
-
-    setStatus("planStatus", `Listo. ${data.orders_planned} pedido(s) planeado(s).`);
-    const summary = qs("planSummary");
-    summary.style.display = "block";
-    summary.innerHTML = `Planeación ${data.planning_year}-${String(data.planning_month).padStart(2,"0")} — <span class="big-num">${data.orders_planned}</span> pedidos`;
-
-    const body = qs("planBody");
-    body.innerHTML = "";
-    data.results.forEach(r => {
-      const tr = document.createElement("tr");
-      if (r.error) {
-        tr.innerHTML = `<td>${r.order_id}</td><td>${r.customer_name ?? "—"}</td><td colspan="3" class="danger-text">${r.error}</td>`;
-        body.appendChild(tr);
-        return;
-      }
-
-      let statusLabel = "—";
-      if (r.lateness_status === "critical") statusLabel = '<span class="danger-text">🔴 ATRASO CRÍTICO</span>';
-      else if (r.lateness_status === "warning") statusLabel = '<span class="warn-text">⚠ Atrasado</span>';
-      else if (r.lateness_status === "on_time") statusLabel = '<span class="highlight">A tiempo</span>';
-
-      tr.style.cursor = "pointer";
-      tr.innerHTML = `
-        <td>${r.order_id}</td><td>${r.customer_name}</td>
-        <td>${r.requested_delivery_date ?? "—"}</td><td>${r.calculated_delivery_date}</td>
-        <td>${statusLabel}</td>`;
-      tr.addEventListener("click", () => togglePlanRouteDiagram(r, tr));
-      body.appendChild(tr);
-    });
-  } catch (e) { setStatus("planStatus", e.message, true); }
-});
-
-let openPlanDiagramRow = null;
-
-function togglePlanRouteDiagram(result, rowEl) {
-  const existing = rowEl.nextElementSibling;
-  if (existing && existing.classList.contains("plan-diagram-row")) {
-    existing.remove();
-    if (openPlanDiagramRow === rowEl) openPlanDiagramRow = null;
-    return;
-  }
-
-  // Close any other open diagram row first (one at a time keeps the table readable)
-  document.querySelectorAll(".plan-diagram-row").forEach(r => r.remove());
-
-  const diagramRow = document.createElement("tr");
-  diagramRow.className = "plan-diagram-row";
-  const cell = document.createElement("td");
-  cell.colSpan = 5;
-  cell.innerHTML = `<div class="chart-block" style="margin:.6rem 0;">
-    <div class="chart-title">Ruta de proceso — pedido #${result.order_id}, semanas asignadas</div>
-    <div class="plan-diagram-target"></div>
-  </div>`;
-  diagramRow.appendChild(cell);
-  rowEl.insertAdjacentElement("afterend", diagramRow);
-
-  renderPlanWeekDiagram(result.team_schedule, cell.querySelector(".plan-diagram-target"));
-  openPlanDiagramRow = rowEl;
-}
-
-function renderPlanWeekDiagram(teamSchedule, container) {
-  const production = [...teamSchedule].reverse(); // upstream-first for left-to-right reading
-
-  const boxWidth = 160, boxHeight = 70, gap = 60;
-  const width = production.length * boxWidth + (production.length - 1) * gap + 40;
-  const height = 150;
-  const y = 30;
-
-  let svg = "";
-  let x = 20;
-
-  production.forEach((s, i) => {
-    const hasError = !!s.error;
-    const fillColor = hasError ? "#2a1c1c" : "#1d2226";
-    const strokeColor = hasError ? "#d9695a" : "#4a9eda";
-    const weekLabel = hasError ? "—" :
-      (s.weeks_elapsed === 1 ? `Sem ${s.breakdown?.[0]?.week_number ?? "?"}` :
-       `Sem ${s.breakdown?.[0]?.week_number ?? "?"}–${s.end_week}`);
-
-    svg += `
-      <g>
-        <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" rx="3"
-              fill="${fillColor}" stroke="${strokeColor}" stroke-width="1.5" />
-        <text x="${x + boxWidth/2}" y="${y + 24}" text-anchor="middle" fill="#fff"
-              font-size="13" font-family="-apple-system, sans-serif" font-weight="600">${s.team_name}</text>
-        <text x="${x + boxWidth/2}" y="${y + 44}" text-anchor="middle" fill="#4a9eda"
-              font-size="12" font-family="ui-monospace, monospace">${weekLabel}</text>
-        <text x="${x + boxWidth/2}" y="${y + 60}" text-anchor="middle" fill="#838d94"
-              font-size="10" font-family="ui-monospace, monospace">${s.fully_scheduled ? "completo" : "parcial"}</text>
-      </g>`;
-
-    if (i < production.length - 1) {
-      const arrowX1 = x + boxWidth;
-      const arrowX2 = x + boxWidth + gap;
-      const arrowY = y + boxHeight / 2;
-      svg += `
-        <line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - 8}" y2="${arrowY}" stroke="#5a636a" stroke-width="1.5" />
-        <polygon points="${arrowX2-8},${arrowY-5} ${arrowX2},${arrowY} ${arrowX2-8},${arrowY+5}" fill="#5a636a" />`;
-    }
-    x += boxWidth + gap;
-  });
-
-  container.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">
-      ${svg}
-    </svg>`;
-}
-
-/* ── Dashboard ────────────────────────────────────────────── */
-
-async function loadDashboard() {
-  try {
-    const year = val("dashYear");
-    const month = val("dashMonth");
-    setStatus("dashStatus", "Cargando…");
-
-    const [orders, teams] = await Promise.all([api("/orders"), api("/teams")]);
-
-    // Orders in the selected planning period
-    const monthOrders = orders.filter(o =>
-      String(o.planning_year) === String(year) && String(o.planning_month) === String(month)
-    );
-
-    const totalOrders = monthOrders.length;
-    const totalTonnage = monthOrders.reduce((sum, o) => sum + parseFloat(o.quantity_requested), 0);
-
-    const planned = monthOrders.filter(o => o.calculated_delivery_date);
-    const onTime = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date <= o.requested_delivery_date
-    ).length;
-    const late = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date > o.requested_delivery_date
-    ).length;
-
-    // Occupancy across all teams for this month
-    const occResults = await Promise.all(
-      teams.map(t => api(`/teams/${t.id}/occupancy?year=${year}&month=${month}`))
-    );
-
-    const avgOccupancies = occResults.map(o => o.overall_occupancy_pct ?? 0);
-    const plantAvgOccupancy = avgOccupancies.length
-      ? (avgOccupancies.reduce((a, b) => a + b, 0) / avgOccupancies.length).toFixed(1)
-      : "—";
-
-    let bottleneck = null;
-    occResults.forEach(o => {
-      if (!bottleneck || (o.overall_occupancy_pct ?? 0) > (bottleneck.overall_occupancy_pct ?? 0)) {
-        bottleneck = o;
-      }
-    });
-
-    // KPI cards
-    const kpis = [
-      { label: "Pedidos este mes", value: totalOrders, cls: "" },
-      { label: "A tiempo / Atrasados", value: `${onTime} / ${late}`, cls: late > 0 ? "warn" : "good" },
-      { label: "Ocupación promedio", value: `${plantAvgOccupancy}%`, cls: plantAvgOccupancy > 90 ? "danger" : "" },
-      { label: "Cuello de botella", value: bottleneck ? bottleneck.team_name : "—",
-        sub: bottleneck ? `${bottleneck.overall_occupancy_pct}% ocupación` : "", cls: "warn" },
-      { label: "Tonelaje total", value: totalTonnage.toLocaleString(undefined, {maximumFractionDigits: 0}), sub: "ton solicitadas", cls: "" },
-    ];
-
-    const grid = qs("kpiGrid");
-    grid.innerHTML = "";
-    kpis.forEach(k => {
-      const card = document.createElement("div");
-      card.className = "kpi-card " + k.cls;
-      card.innerHTML = `
-        <div class="kpi-label">${k.label}</div>
-        <div class="kpi-value">${k.value}</div>
-        ${k.sub ? `<div class="kpi-sub">${k.sub}</div>` : ""}`;
-      grid.appendChild(card);
-    });
-
-    // Per-team occupancy summary table
-    const body = qs("dashOccBody");
-    body.innerHTML = "";
-    occResults.forEach(o => {
-      const busiestWeek = o.weekly_breakdown.reduce((max, w) =>
-        (w.occupancy_pct ?? 0) > (max?.occupancy_pct ?? -1) ? w : max, null);
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${o.team_name}</td>
-        <td class="num">${o.overall_occupancy_pct ?? "—"}%</td>
-        <td>${busiestWeek ? `Semana ${busiestWeek.week_number} (${busiestWeek.occupancy_pct}%)` : "—"}</td>`;
-      body.appendChild(tr);
-    });
-
-    setStatus("dashStatus", "Listo.");
-  } catch (e) { setStatus("dashStatus", e.message, true); }
-}
-
-qs("btnLoadDashboard").addEventListener("click", loadDashboard);
-
-/* ── Quarterly view ───────────────────────────────────────── */
-
-const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
-async function loadQuarterData(year, quarter) {
-  const startMonth = (quarter - 1) * 3 + 1;
-  const months = [startMonth, startMonth + 1, startMonth + 2];
-
-  const [allOrders, teams] = await Promise.all([api("/orders"), api("/teams")]);
-
-  const monthlyStats = [];
-  for (const month of months) {
-    const monthOrders = allOrders.filter(o =>
-      String(o.planning_year) === String(year) && String(o.planning_month) === String(month)
-    );
-    const planned = monthOrders.filter(o => o.calculated_delivery_date);
-    const onTime = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date <= o.requested_delivery_date
-    ).length;
-    const late = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date > o.requested_delivery_date
-    ).length;
-
-    const occResults = await Promise.all(
-      teams.map(t => api(`/teams/${t.id}/occupancy?year=${year}&month=${month}`))
-    );
-    const occValues = occResults.map(o => o.overall_occupancy_pct ?? 0);
-    const avgOcc = occValues.length ? occValues.reduce((a,b) => a+b, 0) / occValues.length : 0;
-
-    monthlyStats.push({ month, onTime, late, avgOcc });
-  }
-  return monthlyStats;
-}
-
-function renderOrdersBarChart(stats, containerId) {
-  const width = 520, height = 200, barWidth = 60, gap = 40;
-  const maxCount = Math.max(1, ...stats.map(s => s.onTime + s.late));
-  const chartHeight = 140;
-  const baseY = 160;
-
-  let bars = "";
-  stats.forEach((s, i) => {
-    const x = 50 + i * (barWidth + gap);
-    const onTimeH = (s.onTime / maxCount) * chartHeight;
-    const lateH = (s.late / maxCount) * chartHeight;
-    const onTimeY = baseY - onTimeH;
-    const lateY = onTimeY - lateH;
-
-    bars += `
-      <rect x="${x}" y="${onTimeY}" width="${barWidth}" height="${onTimeH}" fill="#5fb87a" />
-      <rect x="${x}" y="${lateY}" width="${barWidth}" height="${lateH}" fill="#d9695a" />
-      <text x="${x + barWidth/2}" y="${baseY + 20}" text-anchor="middle" fill="#838d94" font-size="11" font-family="ui-monospace, monospace">${MONTH_NAMES[s.month - 1]}</text>
-      <text x="${x + barWidth/2}" y="${lateY - 6}" text-anchor="middle" fill="#d7dbde" font-size="11" font-family="ui-monospace, monospace">${s.onTime + s.late}</text>`;
-  });
-
-  qs(containerId).innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:520px;">
-      <line x1="40" y1="${baseY}" x2="${width - 20}" y2="${baseY}" stroke="#262c31" stroke-width="1" />
-      ${bars}
-    </svg>
-    <div class="chart-legend">
-      <span><span class="legend-swatch" style="background:#5fb87a;"></span>A tiempo</span>
-      <span><span class="legend-swatch" style="background:#d9695a;"></span>Atrasados</span>
-    </div>`;
-}
-
-function renderOccupancyLineChart(stats, containerId) {
-  const width = 520, height = 200;
-  const chartTop = 20, chartBottom = 160, chartLeft = 50, chartRight = width - 20;
-  const usableWidth = chartRight - chartLeft;
-
-  const points = stats.map((s, i) => {
-    const x = chartLeft + (i / (stats.length - 1 || 1)) * usableWidth;
-    const y = chartBottom - (Math.min(s.avgOcc, 100) / 100) * (chartBottom - chartTop);
-    return { x, y, label: MONTH_NAMES[s.month - 1], value: s.avgOcc.toFixed(1) };
-  });
-
-  const pathD = points.map((p, i) => (i === 0 ? "M" : "L") + `${p.x},${p.y}`).join(" ");
-
-  let dots = "";
-  points.forEach(p => {
-    dots += `
-      <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#4a9eda" />
-      <text x="${p.x}" y="${p.y - 10}" text-anchor="middle" fill="#d7dbde" font-size="11" font-family="ui-monospace, monospace">${p.value}%</text>
-      <text x="${p.x}" y="${chartBottom + 20}" text-anchor="middle" fill="#838d94" font-size="11" font-family="ui-monospace, monospace">${p.label}</text>`;
-  });
-
-  // 100% reference line
-  const fullLineY = chartBottom - (chartBottom - chartTop);
-
-  qs(containerId).innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:520px;">
-      <line x1="${chartLeft}" y1="${chartBottom}" x2="${chartRight}" y2="${chartBottom}" stroke="#262c31" stroke-width="1" />
-      <line x1="${chartLeft}" y1="${fullLineY}" x2="${chartRight}" y2="${fullLineY}" stroke="#262c31" stroke-width="1" stroke-dasharray="3,3" />
-      <text x="${chartRight}" y="${fullLineY - 4}" text-anchor="end" fill="#5a636a" font-size="10" font-family="ui-monospace, monospace">100%</text>
-      <path d="${pathD}" fill="none" stroke="#4a9eda" stroke-width="2" />
-      ${dots}
-    </svg>`;
-}
-
-qs("btnLoadQuarter").addEventListener("click", async () => {
-  try {
-    const year = val("qYear");
-    const quarter = parseInt(val("qQuarter"));
-    setStatus("qStatus", "Cargando…");
-
-    const stats = await loadQuarterData(year, quarter);
-    renderOrdersBarChart(stats, "qOrdersChart");
-    renderOccupancyLineChart(stats, "qOccChart");
-
-    setStatus("qStatus", "Listo.");
-  } catch (e) { setStatus("qStatus", e.message, true); }
-});
-
-/* ── Ocupación (todos los equipos) ────────────────────────── */
-
-qs("btnGetOccupancy").addEventListener("click", async () => {
-  try {
-    const year = val("occYear"), month = val("occMonth");
-    setStatus("occStatus", "Cargando…");
-
-    const teams = await api("/teams");
-    const container = qs("occAllTeams");
-    container.innerHTML = "";
-
-    for (const team of teams) {
-      const data = await api(`/teams/${team.id}/occupancy?year=${year}&month=${month}`);
-
-      const block = document.createElement("div");
-      block.className = "occ-team-block";
-      let rowsHtml = "";
-      data.weekly_breakdown.forEach(w => {
-        const pct = w.occupancy_pct ?? 0;
-        const displayPct = Math.min(pct, 100);
-        let fillClass = "";
-        if (pct > 100) fillClass = "over";
-        else if (w.capacity_multiplier < 1) fillClass = "holiday";
-        rowsHtml += `
-          <div class="occ-bar-row">
-            <div class="occ-week-label">SEM ${w.week_number}</div>
-            <div class="occ-track"><div class="occ-fill ${fillClass}" style="width:${displayPct}%">${pct}%</div></div>
-            <div class="occ-reason">${w.reason ?? ""}</div>
-          </div>`;
-      });
-      block.innerHTML = `
-        <div class="occ-team-name">${data.team_name} <span style="color:var(--text-faint); font-weight:400;">— ${data.overall_occupancy_pct ?? "—"}% promedio</span></div>
-        ${rowsHtml}`;
-      container.appendChild(block);
-    }
-    setStatus("occStatus", "Listo.");
-  } catch (e) { setStatus("occStatus", e.message, true); }
-});
-
-/* ── Initial load ─────────────────────────────────────────── */
-refresh("dashboard");
-</script>
+<script src="js/api.js"></script>
+<script src="js/teams.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/exceptions.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/requirements.js"></script>
+<script src="js/planning.js"></script>
+<script src="js/heuristica.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/occupancy.js"></script>
+<script src="js/main.js"></script>
 
 </body>
 </html>

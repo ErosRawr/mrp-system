@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import date
 from calculations import calculate_material_requirements
-from planning import run_monthly_planning
+from planning import run_monthly_planning, compare_planning_criteria
 from mexican_holidays import get_holiday_week_impact
 
 import models
@@ -95,6 +95,8 @@ def create_order(
     requested_delivery_date: date = None,
     planning_year: int = None,
     planning_month: int = None,
+    is_priority: bool = False,
+    tipo_pedido: str = None,
     db: Session = Depends(get_db),
 ):
     if quantity_requested <= 0:
@@ -123,6 +125,8 @@ def create_order(
         requested_delivery_date=requested_delivery_date,
         planning_year=planning_year,
         planning_month=planning_month,
+        is_priority=is_priority,
+        tipo_pedido=tipo_pedido,
     )
     db.add(order)
     db.commit()
@@ -145,6 +149,8 @@ def update_order(
     requested_delivery_date: date = None,
     planning_year: int = None,
     planning_month: int = None,
+    is_priority: bool = None,
+    tipo_pedido: str = None,
     db: Session = Depends(get_db),
 ):
     """
@@ -178,6 +184,10 @@ def update_order(
         order.planning_year = planning_year
     if planning_month is not None:
         order.planning_month = planning_month
+    if is_priority is not None:
+        order.is_priority = is_priority
+    if tipo_pedido is not None:
+        order.tipo_pedido = tipo_pedido
 
     final_order_date = order_date if order_date is not None else order.order_date
     final_due_date = requested_delivery_date if requested_delivery_date is not None else order.requested_delivery_date
@@ -383,25 +393,44 @@ def list_inventory(db: Session = Depends(get_db)):
 
 
 @app.post("/planning/run")
-def trigger_monthly_planning(year: int, month: int, db: Session = Depends(get_db)):
+def trigger_monthly_planning(
+    year: int, month: int,
+    criterion: str = "peps",
+    db: Session = Depends(get_db),
+):
     """
     The core spec requirement: runs the monthly planning process. Takes
-    every order registered for (year, month), sorts by requested delivery
-    date, and walks each one through the full team chain, consuming each
+    every order registered for (year, month), sorts according to
+    `criterion` (peps, prioritario, or heuristica -- see heuristics.py),
+    and walks each one through the full team chain, consuming each
     team's weekly capacity so orders queue realistically against each
     other and against whatever capacity remains.
 
     Writes calculated_delivery_date back onto each order and commits the
-    underlying CapacityAllocation rows. Safe to re-run for the same month
-    only if you understand it will add NEW allocations on top of any
-    already committed by a prior run for the same orders -- for a clean
-    re-run, allocations for that month's orders should be cleared first
-    (not yet implemented; run once per month per this MVP).
+    underlying CapacityAllocation rows. Idempotent -- re-running for the
+    same month clears prior allocations for that month's orders first.
+    """
+    if not (1 <= month <= 12):
+        raise HTTPException(400, "month must be between 1 and 12")
+    if criterion not in ("peps", "prioritario", "heuristica"):
+        raise HTTPException(400, "criterion must be one of: peps, prioritario, heuristica")
+
+    result = run_monthly_planning(year, month, db, criterion=criterion)
+    return result
+
+
+@app.get("/planning/compare")
+def compare_planning(year: int, month: int, db: Session = Depends(get_db)):
+    """
+    Runs all three planning criteria (peps, prioritario, heuristica) for
+    the given month WITHOUT committing any of them -- lets you compare
+    how each strategy would schedule the month's orders before choosing
+    one to actually run for real via POST /planning/run.
     """
     if not (1 <= month <= 12):
         raise HTTPException(400, "month must be between 1 and 12")
 
-    result = run_monthly_planning(year, month, db)
+    result = compare_planning_criteria(year, month, db)
     return result
 
 

@@ -43,6 +43,19 @@ class Order(Base):
     # the order has been through a planning run.
     calculated_delivery_date = Column(Date, nullable=True)
 
+    # Manually hand-picked priority flag -- NOT computed from tonnage or
+    # anything else. A priority order jumps ahead of all non-priority
+    # orders in the "prioritario" and "heuristica" planning criteria,
+    # regardless of its requested_delivery_date.
+    is_priority = Column(Boolean, nullable=False, default=False)
+
+    # Steel grade / order category. Used by the heuristic planning
+    # criterion to break ties within the same priority/tonnage tier.
+    # Free text rather than a hard enum, since the professor's list of
+    # categories may grow (comercial, galvanizado, perfiles, perfileros,
+    # tuberia, ojalatero, especial, ...).
+    tipo_pedido = Column(String(50), nullable=True)
+
 
 class TeamWeekException(Base):
     """

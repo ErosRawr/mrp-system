@@ -19,6 +19,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 import models
 from calculations import calculate_material_requirements
+from heuristics import sort_orders_by_criterion
 
 
 def _iso_year_week(d: date):
@@ -125,28 +126,18 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     }
 
 
-def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
+def _plan_orders_in_sequence(orders, db: Session):
     """
-    The core spec requirement: takes every order registered for
-    (planning_year, planning_month), sorts by requested_delivery_date,
-    and computes a calculated_delivery_date for each -- walking the full
-    team chain in production order (upstream first), consuming weekly
-    capacity as it goes so orders queue realistically against each other.
+    Core scheduling loop: given orders ALREADY SORTED in the desired
+    processing order, walks each one through its full team chain,
+    consuming weekly capacity as it goes. Writes calculated_delivery_date
+    onto each Order object and CapacityAllocation rows via db.add(), but
+    does NOT commit -- the caller decides whether to commit or roll back.
 
-    Writes calculated_delivery_date back onto each Order, and commits
-    CapacityAllocation rows so the run's effects are persisted, not just
-    returned.
+    This is shared by both the real planning run (which commits) and the
+    comparison runner (which rolls back after collecting results), so the
+    actual scheduling logic only exists in one place.
     """
-    orders = (
-        db.query(models.Order)
-        .filter(
-            models.Order.planning_year == planning_year,
-            models.Order.planning_month == planning_month,
-        )
-        .order_by(models.Order.requested_delivery_date.asc().nullslast())
-        .all()
-    )
-
     results = []
 
     for order in orders:
@@ -159,11 +150,8 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
             })
             continue
 
-        # requirements["steps"] is entry-team-first (downstream), upstream-last.
-        # Production happens upstream-first, so reverse for time-chaining.
         steps_in_production_order = list(reversed(requirements["steps"]))
 
-        # Start the chain at the order's registration week.
         start_year, start_week = _iso_year_week(order.order_date)
         next_year, next_week = start_year, start_week
 
@@ -192,8 +180,6 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
                 **result,
             })
 
-            # Next (downstream) team starts the week AFTER this team
-            # finishes, since its output isn't ready until then.
             next_week = result["end_week"] + 1
             next_year = result["end_year"]
             if next_week > 52:
@@ -209,18 +195,12 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
             })
             continue
 
-        # The entry team (last in production order) finishing determines
-        # the actual delivery date -- expressed as that week's end date.
         final_step = team_schedule_results[-1]
         calculated_delivery_date = _week_end_date(final_step["end_year"], final_step["end_week"])
 
         order.calculated_delivery_date = calculated_delivery_date
         db.add(order)
 
-        # Lateness tiers, per the professor's rule:
-        #   <= 7 days late (or early)  -> on time (within grace period)
-        #   8-14 days late             -> warning
-        #   > 14 days late             -> critical (red alert)
         is_late = None
         lateness_status = None
         days_late = None
@@ -238,6 +218,8 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
             "order_id": order.id,
             "customer_name": order.customer_name,
             "quantity_requested": float(order.quantity_requested),
+            "is_priority": order.is_priority,
+            "tipo_pedido": order.tipo_pedido,
             "requested_delivery_date": str(order.requested_delivery_date) if order.requested_delivery_date else None,
             "calculated_delivery_date": str(calculated_delivery_date),
             "is_late": is_late,
@@ -246,11 +228,122 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session):
             "team_schedule": team_schedule_results,
         })
 
+    return results
+
+
+def run_monthly_planning(planning_year: int, planning_month: int, db: Session, criterion: str = "peps"):
+    """
+    The core spec requirement: takes every order registered for
+    (planning_year, planning_month), sorts according to `criterion`, and
+    computes a calculated_delivery_date for each -- walking the full team
+    chain in production order (upstream first), consuming weekly capacity
+    as it goes so orders queue realistically against each other.
+
+    criterion selects the sort order orders are PROCESSED in (see
+    heuristics.py): "peps" (pure FIFO by requested date, the default),
+    "prioritario" (priority orders first), or "heuristica" (priority,
+    then tonnage at/above 15k tons, then tipo_pedido rank).
+
+    Writes calculated_delivery_date back onto each Order, and commits
+    CapacityAllocation rows so the run's effects are persisted, not just
+    returned.
+
+    Idempotent: re-running for the same month first clears any
+    CapacityAllocation rows previously committed by an earlier run for
+    that month's orders, so re-running produces a clean result rather
+    than stacking duplicate allocations on top of the old ones.
+    """
+    orders = (
+        db.query(models.Order)
+        .filter(
+            models.Order.planning_year == planning_year,
+            models.Order.planning_month == planning_month,
+        )
+        .all()
+    )
+
+    order_ids = [o.id for o in orders]
+    if order_ids:
+        db.query(models.CapacityAllocation).filter(
+            models.CapacityAllocation.order_id.in_(order_ids)
+        ).delete(synchronize_session=False)
+        db.flush()
+
+    orders = sort_orders_by_criterion(orders, criterion)
+    results = _plan_orders_in_sequence(orders, db)
+
     db.commit()
 
     return {
         "planning_year": planning_year,
         "planning_month": planning_month,
+        "criterion": criterion,
         "orders_planned": len(results),
         "results": results,
+    }
+
+
+def compare_planning_criteria(planning_year: int, planning_month: int, db: Session,
+                               criteria: list = None):
+    """
+    Runs planning under multiple criteria WITHOUT committing any of them --
+    lets you compare how different prioritization strategies would play
+    out before choosing one to actually run for real (via
+    run_monthly_planning, which does commit).
+
+    Each criterion is evaluated against a clean slate: prior
+    CapacityAllocation rows for that month's orders are cleared (within
+    the uncommitted transaction) before each criterion runs, so criteria
+    don't bleed into each other's results. The whole comparison is rolled
+    back at the end -- nothing is persisted by this function.
+    """
+    if criteria is None:
+        criteria = ["peps", "prioritario", "heuristica"]
+
+    orders = (
+        db.query(models.Order)
+        .filter(
+            models.Order.planning_year == planning_year,
+            models.Order.planning_month == planning_month,
+        )
+        .all()
+    )
+    order_ids = [o.id for o in orders]
+
+    comparison = {}
+
+    try:
+        for criterion in criteria:
+            if order_ids:
+                db.query(models.CapacityAllocation).filter(
+                    models.CapacityAllocation.order_id.in_(order_ids)
+                ).delete(synchronize_session=False)
+                db.flush()
+
+            sorted_orders = sort_orders_by_criterion(orders, criterion)
+            results = _plan_orders_in_sequence(sorted_orders, db)
+
+            on_time = sum(1 for r in results if r.get("lateness_status") == "on_time")
+            warning = sum(1 for r in results if r.get("lateness_status") == "warning")
+            critical = sum(1 for r in results if r.get("lateness_status") == "critical")
+
+            comparison[criterion] = {
+                "results": results,
+                "summary": {
+                    "on_time": on_time,
+                    "warning": warning,
+                    "critical": critical,
+                    "errors": sum(1 for r in results if "error" in r),
+                },
+            }
+    finally:
+        # Always roll back -- this function never persists anything,
+        # regardless of how it exits.
+        db.rollback()
+
+    return {
+        "planning_year": planning_year,
+        "planning_month": planning_month,
+        "criteria_compared": criteria,
+        "comparison": comparison,
     }
