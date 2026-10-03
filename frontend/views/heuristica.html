@@ -1,0 +1,39 @@
+  <!-- HEURISTICA -->
+  <div class="view" id="view-heuristica">
+    <h1>Comparación de criterios</h1>
+    <p class="view-desc">
+      Compara cómo quedarían los pedidos del mes bajo tres estrategias distintas,
+      sin comprometer ninguna. PEPS ordena por fecha solicitada; Prioritario
+      adelanta los pedidos marcados como prioritarios; Heurística combina
+      prioridad, tonelaje (15,000+ ton ordena de forma continua) y tipo de
+      pedido (comercial primero, especial al final).
+    </p>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Año</label><input id="heurYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="heurMonth" type="number" min="1" max="12" value="9" /></div>
+        <button class="btn" id="btnCompareHeuristics">Comparar</button>
+      </div>
+      <div class="status" id="heurStatus"></div>
+    </div>
+
+    <div class="criteria-columns" id="criteriaColumns"></div>
+
+    <div class="panel" id="heurCommitPanel" style="display:none; margin-top:1.1rem;">
+      <div class="panel-title">Aplicar un criterio</div>
+      <div class="form-row">
+        <div class="field">
+          <label>Criterio a ejecutar</label>
+          <select id="heurCommitCriterion">
+            <option value="peps">PEPS (FIFO)</option>
+            <option value="prioritario">Prioritario</option>
+            <option value="heuristica">Heurística</option>
+          </select>
+        </div>
+        <button class="btn" id="btnCommitHeuristic">Ejecutar y guardar</button>
+      </div>
+      <div class="status" id="heurCommitStatus"></div>
+    </div>
+  </div>
+

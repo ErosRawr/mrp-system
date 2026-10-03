@@ -1,0 +1,50 @@
+  <!-- PEDIDOS -->
+  <div class="view" id="view-orders">
+    <h1>Pedidos</h1>
+    <p class="view-desc">Cada pedido entra en un equipo de la ruta y lleva una fecha solicitada de entrega.</p>
+
+    <div class="panel">
+      <div class="panel-title" id="orderFormTitle">Nuevo pedido</div>
+      <div class="form-row">
+        <div class="field"><label>Cliente</label><input id="orderCust" /></div>
+        <div class="field"><label>Tonelaje</label><input id="orderQty" type="number" step="0.01" /></div>
+        <div class="field"><label>Equipo de entrada</label><select id="orderTeam"></select></div>
+        <div class="field"><label>Fecha de pedido</label><input id="orderDate" type="date" /></div>
+        <div class="field"><label>Fecha solicitada</label><input id="orderReqDate" type="date" /></div>
+        <div class="field"><label>Tipo de pedido</label>
+          <select id="orderTipo">
+            <option value="">—</option>
+            <option value="comercial">Comercial</option>
+            <option value="galvanizado">Galvanizado</option>
+            <option value="perfiles">Perfiles</option>
+            <option value="perfileros">Perfileros</option>
+            <option value="tuberia">Tubería</option>
+            <option value="ojalatero">Ojalatero</option>
+            <option value="especial">Especial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <label style="flex-direction:row; align-items:center; gap:.4rem; font-size:.84rem; color:var(--text);">
+            <input id="orderPriority" type="checkbox" style="min-width:auto; width:auto;" /> Prioritario
+          </label>
+        </div>
+        <button class="btn" id="btnCreateOrder">Crear</button>
+        <button class="btn" id="btnCancelEditOrder" style="display:none; background:transparent; border-color:var(--border);">Cancelar</button>
+      </div>
+      <div class="status" id="orderStatus"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Cliente</th><th class="num">Ton</th>
+          <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
+          <th>Tipo</th><th>Prior.</th>
+          <th>Periodo</th><th>F. calculada</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
+

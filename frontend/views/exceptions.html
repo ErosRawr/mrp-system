@@ -1,0 +1,37 @@
+  <!-- DISPONIBILIDAD -->
+  <div class="view" id="view-exceptions">
+    <h1>Disponibilidad</h1>
+    <p class="view-desc">Reduce la capacidad de un equipo para una semana específica — mantenimiento, días festivos, etc. Multiplicador 1.0 = capacidad completa, 0.0 = sin disponibilidad.</p>
+
+    <div class="panel">
+      <div class="panel-title">Nueva excepción</div>
+      <div class="form-row">
+        <div class="field"><label>Equipo</label><select id="excTeam"></select></div>
+        <div class="field"><label>Año</label><input id="excYear" type="number" value="2026" /></div>
+        <div class="field"><label>Semana</label><input id="excWeek" type="number" min="1" max="53" /></div>
+        <div class="field"><label>Multiplicador</label><input id="excMultiplier" type="number" step="0.05" min="0" max="1" value="1.0" /></div>
+        <div class="field"><label>Motivo (opcional)</label><input id="excReason" placeholder="Mantenimiento" /></div>
+        <button class="btn" id="btnSetExc">Guardar</button>
+      </div>
+      <div class="status" id="excStatus"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Importar días festivos (México)</div>
+      <div class="form-row">
+        <div class="field"><label>Equipo</label><select id="holidayTeam"></select></div>
+        <div class="field"><label>Año</label><input id="holidayYear" type="number" value="2026" /></div>
+        <div class="field"><label>Días laborales/semana</label><input id="holidayWorkDays" type="number" min="1" value="5" /></div>
+        <button class="btn" id="btnImportHolidays">Importar</button>
+      </div>
+      <div class="status" id="holidayStatus"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>ID</th><th class="num">Equipo</th><th class="num">Año</th><th class="num">Semana</th><th class="num">Mult.</th><th>Motivo</th><th></th></tr>
+      </thead>
+      <tbody id="excBody"></tbody>
+    </table>
+  </div>
+

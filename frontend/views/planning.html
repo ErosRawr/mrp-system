@@ -1,0 +1,35 @@
+  <!-- PLANEACION -->
+  <div class="view" id="view-planning">
+    <h1>Planeación mensual</h1>
+    <p class="view-desc">Toma todos los pedidos del mes, los ordena por fecha solicitada, y asigna capacidad semanal a lo largo de toda la ruta.</p>
+
+    <div class="panel">
+      <div class="form-row">
+        <div class="field"><label>Año</label><input id="planYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="planMonth" type="number" min="1" max="12" value="9" /></div>
+        <div class="field">
+          <label>Criterio</label>
+          <select id="planCriterion">
+            <option value="peps">PEPS (FIFO)</option>
+            <option value="prioritario">Prioritario</option>
+            <option value="heuristica">Heurística</option>
+          </select>
+        </div>
+        <button class="btn" id="btnRunPlanning">Ejecutar planeación</button>
+      </div>
+      <div class="status" id="planStatus"></div>
+    </div>
+
+    <div class="summary-box" id="planSummary" style="display:none;"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Pedido</th><th>Cliente</th><th>F. solicitada</th>
+          <th>F. calculada</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="planBody"></tbody>
+    </table>
+  </div>
+
