@@ -1,28 +1,36 @@
 """
-Seed a full year of realistic demo data: the professor's own team
-numbers, plus ~100 orders spread across all 12 months (all 4 quarters),
-with randomized-but-plausible quantities and requested delivery dates,
-then runs the monthly planning batch for every month so the dashboard,
-quarterly charts, and occupancy views all have real data to show.
+Seed data designed to showcase the three planning criteria (PEPS,
+Prioritario, Heuristica) producing visibly DIFFERENT results, at a
+realistic volume (100+ orders).
 
-This is separate from seed_data.py (which is the small, deterministic
-scenario used to verify the FIFO/contention logic in isolation) --
-this script is specifically for producing a rich, demo-ready dataset.
+Two parts:
+  1. A handful of hand-crafted "storyline" orders, each built to make a
+     specific point about how the criteria disagree (see comments below).
+     These are the ones worth pointing at directly in a demo.
+  2. ~100 additional randomized orders (reproducible via a fixed seed)
+     to give the month realistic volume -- so the dashboard, occupancy,
+     and quarterly views all have something substantial to show, and so
+     the storyline orders are proven to still behave correctly even
+     amid a busy, contested month rather than in an artificially empty one.
+
+All orders enter at Equipo 4 (the bottleneck, weekly capacity ~12,500
+tons with the professor's numbers) so they genuinely compete for the
+same capacity.
 
 Usage:
     1. Start the backend:  uvicorn main:app --reload
-    2. Run this script:    python seed_demo_data.py
+    2. Run this script:    python seed_heuristic_demo.py
 """
 
 import random
 import requests
-from datetime import date, timedelta
+from datetime import date
 
 BASE = "http://localhost:8000"
 
-random.seed(42)  # reproducible demo data -- same run every time
+random.seed(7)  # reproducible -- same 100+ orders every run
 
-counts = {"teams": 0, "orders": 0, "months_planned": 0}
+counts = {"teams": 0, "orders": 0}
 
 
 def post(path, params, label=None, quiet=False):
@@ -42,7 +50,7 @@ def post(path, params, label=None, quiet=False):
         return None
 
 
-# -- 1. Teams -- exactly the professor's worked example --
+# -- 1. Teams -- professor's exact worked example --
 
 TEAMS = [
     {"name": "Equipo 1", "sequence_order": 1, "monthly_capacity": 100000, "efficiency": 0.98},
@@ -61,20 +69,60 @@ for t in TEAMS:
 
 print()
 
-# -- 2. Import Mexican holidays for every team for 2026 --
+YEAR, MONTH = 2026, 9
+ORDER_DATE = date(YEAR, MONTH, 1).isoformat()
+TIPOS = ["comercial", "galvanizado", "perfiles", "perfileros", "tuberia", "ojalatero", "especial"]
 
-print("Importando dias festivos mexicanos 2026 para cada equipo...")
-for name, tid in team_ids.items():
-    post("/team-week-exceptions/import-mexican-holidays",
-         {"team_id": tid, "year": 2026}, f"{name}: festivos importados", quiet=True)
+# -- 2. Storyline orders -- hand-crafted to make the three criteria
+# visibly disagree. These are worth pointing at directly in a demo.
+
+STORYLINE_ORDERS = [
+    # name, qty, requested_day, is_priority, tipo_pedido
+    ("Urgente Tardio",   4000, 3,  False, "especial"),
+    # ^ earliest requested date, but lowest-rank tipo and no priority:
+    #   PEPS puts this FIRST; Heuristica pushes it toward the back.
+
+    ("Cliente VIP",      3500, 28, True,  "comercial"),
+    # ^ latest requested date of the storyline batch, but is_priority=True:
+    #   PEPS puts this near LAST; Prioritario and Heuristica put it FIRST.
+
+    ("Pedido Grande",    18000, 15, False, "tuberia"),
+    # ^ above the 15k threshold -- Heuristica ranks this near the top
+    #   purely on tonnage, even without priority.
+]
+
+print("Creando pedidos de historia (storyline)...")
+storyline_customer_names = set()
+for name, qty, day, priority, tipo in STORYLINE_ORDERS:
+    storyline_customer_names.add(name)
+    params = {
+        "customer_name": name,
+        "quantity_requested": qty,
+        "entry_team_id": team_ids["Equipo 4"],
+        "order_date": ORDER_DATE,
+        "requested_delivery_date": date(YEAR, MONTH, day).isoformat(),
+        "planning_year": YEAR,
+        "planning_month": MONTH,
+        "is_priority": priority,
+        "tipo_pedido": tipo,
+    }
+    data = post("/orders", params, f"{name} (qty={qty}, prioridad={priority}, tipo={tipo})")
+    if data:
+        counts["orders"] += 1
 
 print()
 
-# -- 3. ~100 orders spread across all 12 months of 2026 --
-# Entry team is randomized across teams so different orders exercise
-# different parts of the chain -- some orders only need the last team,
-# some need the whole route. Quantities vary so some months are light
-# and some push close to capacity (visible in the dashboard/occupancy).
+# -- 3. ~100 additional randomized orders, spread across ALL 12 months
+# of the year -- not just September. This gives the Dashboard's
+# quarterly charts, the yearly Calendar view, and Occupancy all real
+# data to show across the full year, not just one month. The storyline
+# orders above stay anchored in September specifically so there's still
+# one clearly "busy" month to run the Heuristica comparison against.
+#
+# Mostly non-priority, varied tonnage and tipo. A small minority (about
+# 8%) are randomly priority, so Prioritario/Heuristica have real
+# contenders to reshuffle beyond just the storyline orders, in whatever
+# month they land in.
 
 CUSTOMER_NAMES = [
     "Aceros del Norte", "Construcciones Monclova", "Grupo Ferroindustrial",
@@ -82,65 +130,83 @@ CUSTOMER_NAMES = [
     "Aceros Torreon", "Constructora Regiomontana", "Fundidora del Centro",
     "Acero y Forja SA", "Metales Especializados", "Grupo Siderurgico MX",
     "Estructuras del Norte", "Laminados Industriales", "Perfilados Coahuila",
+    "Tuberia Industrial MX", "Galvanizados del Bravo", "Comercial Acerera",
+    "Ojalateria Central", "Especiales del Norte",
 ]
 
-YEAR = 2026
-TEAM_NAMES = list(team_ids.keys())
+TOTAL_RANDOM_ORDERS = 100
+ORDERS_PER_MONTH = TOTAL_RANDOM_ORDERS // 12  # ~8/month x 12 = ~96, plus remainder below
 
-print("Creando ~100 pedidos distribuidos en los 12 meses del 2026...")
-order_ids = []
-orders_per_month_target = 8  # ~8/month x 12 = ~96 orders
+print(f"Creando {TOTAL_RANDOM_ORDERS} pedidos adicionales distribuidos en los 12 meses del {YEAR}...")
+random_created = 0
 
 for month in range(1, 13):
-    for _ in range(orders_per_month_target):
-        entry_team_name = random.choice(TEAM_NAMES)
-        # Bias quantities toward Equipo 4's realistic weekly scale (~12,500)
-        # so orders entering there create visible contention; orders
-        # entering earlier teams can be larger since those teams have
-        # much higher capacity.
-        if entry_team_name == "Equipo 4":
-            qty = random.randint(800, 3000)
-        elif entry_team_name in ("Equipo 2", "Equipo 3"):
-            qty = random.randint(1000, 5000)
+    # Give the remainder months (if TOTAL_RANDOM_ORDERS doesn't divide
+    # evenly by 12) one extra order each, so the total still adds up.
+    this_month_count = ORDERS_PER_MONTH + (1 if month <= (TOTAL_RANDOM_ORDERS % 12) else 0)
+
+    month_order_date = date(YEAR, month, 1).isoformat()
+
+    for _ in range(this_month_count):
+        tipo = random.choice(TIPOS)
+        is_priority = random.random() < 0.08  # ~8% priority, a real minority
+
+        # Tonnage: mostly modest, occasionally above the 15k heuristic
+        # threshold so there's real tonnage-driven contenders beyond
+        # "Pedido Grande" alone.
+        if random.random() < 0.1:
+            qty = random.randint(15000, 25000)  # above threshold
         else:
-            qty = random.randint(1500, 8000)
+            qty = random.randint(500, 8000)
 
-        order_day = random.randint(1, 25)  # leave room for delivery date to stay in-month-ish
-        order_date = date(YEAR, month, order_day)
-
-        # Requested delivery: somewhere between 5 and 25 days after order_date
-        requested_delivery = order_date + timedelta(days=random.randint(5, 25))
-
+        # Keep requested day within a range that stays inside (or close
+        # to) the same calendar month, leaving room for delivery dates.
+        day = random.randint(2, 25)
         customer = random.choice(CUSTOMER_NAMES)
 
         params = {
             "customer_name": customer,
             "quantity_requested": qty,
-            "entry_team_id": team_ids[entry_team_name],
-            "order_date": order_date.isoformat(),
-            "requested_delivery_date": requested_delivery.isoformat(),
+            "entry_team_id": team_ids["Equipo 4"],
+            "order_date": month_order_date,
+            "requested_delivery_date": date(YEAR, month, day).isoformat(),
             "planning_year": YEAR,
             "planning_month": month,
+            "is_priority": is_priority,
+            "tipo_pedido": tipo,
         }
         data = post("/orders", params, quiet=True)
         if data:
-            order_ids.append(data["id"])
+            random_created += 1
             counts["orders"] += 1
 
-print(f"  {counts['orders']} pedidos creados.")
+print(f"  {random_created} pedidos aleatorios creados, distribuidos en los 12 meses.")
 print()
 
-# -- 4. Run monthly planning for every month that has orders --
+# -- 4. Import Mexican holidays for Equipo 4 --
 
-print("Ejecutando planeacion mensual para cada mes...")
+print("Importando dias festivos para Equipo 4...")
+post("/team-week-exceptions/import-mexican-holidays",
+     {"team_id": team_ids["Equipo 4"], "year": YEAR}, "Equipo 4: festivos importados")
+
+print()
+
+# -- 5. Run monthly planning (PEPS, the default) for every month that
+# has orders, so the Dashboard, quarterly charts, Calendar, and
+# Occupancy views all have calculated_delivery_date data across the
+# whole year -- not just September. September specifically is left for
+# you to re-run manually in the Heuristica tab to see the storyline
+# contrast (running it here with PEPS would just show the PEPS result).
+
+print("Ejecutando planeacion mensual (PEPS) para cada mes...")
 for month in range(1, 13):
-    r = requests.post(f"{BASE}/planning/run", params={"year": YEAR, "month": month})
+    if month == MONTH:
+        print(f"  {YEAR}-{month:02d}: omitido -- compara este mes en la pestana Heuristica")
+        continue
+    r = requests.post(f"{BASE}/planning/run", params={"year": YEAR, "month": month, "criterion": "peps"})
     if r.status_code == 200:
         result = r.json()
-        if result["orders_planned"] > 0:
-            late_count = sum(1 for x in result["results"] if x.get("is_late") is True)
-            print(f"  {YEAR}-{month:02d}: {result['orders_planned']} pedidos planeados, {late_count} atrasados")
-            counts["months_planned"] += 1
+        print(f"  {YEAR}-{month:02d}: {result['orders_planned']} pedidos planeados")
     else:
         print(f"  {YEAR}-{month:02d}: FAILED -- {r.status_code} {r.text}")
 
@@ -149,9 +215,16 @@ print()
 # -- Summary --
 
 print("--- Seed completo ---")
-print(f"Equipos:          {counts['teams']}")
-print(f"Pedidos:          {counts['orders']}")
-print(f"Meses planeados:  {counts['months_planned']}")
+print(f"Equipos: {counts['teams']}")
+print(f"Pedidos: {counts['orders']} ({len(STORYLINE_ORDERS)} de historia + {random_created} aleatorios)")
+print(f"Pedidos distribuidos en los 12 meses de {YEAR}; planeacion (PEPS) ya ejecutada")
+print(f"para todos los meses EXCEPTO {YEAR}-{MONTH:02d}.")
 print()
-print("El dashboard, las graficas trimestrales, el calendario y la vista")
-print("de ocupacion ahora tienen datos reales distribuidos en todo el 2026.")
+print("Dashboard / graficas trimestrales / calendario / ocupacion: ya tienen datos")
+print("reales en todo el ano.")
+print()
+print(f"Para ver el contraste de criterios, ve a la pestana Heuristica y compara")
+print(f"el mes {YEAR}-{MONTH:02d}. Busca estos pedidos de historia:")
+print('  - "Urgente Tardio": primero en PEPS, al final en Heuristica')
+print('  - "Cliente VIP": casi al final en PEPS, primero en Prioritario y Heuristica')
+print('  - "Pedido Grande": cerca del frente en Heuristica por tonelaje (18,000 ton)')
