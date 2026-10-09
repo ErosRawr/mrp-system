@@ -12,6 +12,7 @@ const CRITERION_DESC = {
 };
 
 qs("btnCompareHeuristics").addEventListener("click", async () => {
+  const done = setLoading("btnCompareHeuristics", "Comparando");
   try {
     const year = val("heurYear"), month = val("heurMonth");
     setStatus("heurStatus", "Comparando…");
@@ -59,9 +60,11 @@ qs("btnCompareHeuristics").addEventListener("click", async () => {
 
     qs("heurCommitPanel").style.display = "block";
   } catch (e) { setStatus("heurStatus", e.message, true); }
+  finally { done(); }
 });
 
 qs("btnCommitHeuristic").addEventListener("click", async () => {
+  const done = setLoading("btnCommitHeuristic", "Guardando");
   try {
     const year = val("heurYear"), month = val("heurMonth"), criterion = val("heurCommitCriterion");
     setStatus("heurCommitStatus", "Ejecutando y guardando…");
@@ -73,5 +76,5 @@ qs("btnCommitHeuristic").addEventListener("click", async () => {
     const cols = document.querySelectorAll(".criterion-col");
     if (cols[idx]) cols[idx].classList.add("selected");
   } catch (e) { setStatus("heurCommitStatus", e.message, true); }
+  finally { done(); }
 });
-

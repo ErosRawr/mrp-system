@@ -1,6 +1,7 @@
 /* ── Planeación ───────────────────────────────────────────── */
 
 qs("btnRunPlanning").addEventListener("click", async () => {
+  const done = setLoading("btnRunPlanning", "Ejecutando");
   try {
     const year = val("planYear"), month = val("planMonth"), criterion = val("planCriterion");
     setStatus("planStatus", "Ejecutando…");
@@ -35,6 +36,7 @@ qs("btnRunPlanning").addEventListener("click", async () => {
       body.appendChild(tr);
     });
   } catch (e) { setStatus("planStatus", e.message, true); }
+  finally { done(); }
 });
 
 function togglePlanRouteDiagram(result, rowEl) {
@@ -102,4 +104,3 @@ function renderPlanWeekDiagram(teamSchedule, container) {
 
   container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">${svg}</svg>`;
 }
-

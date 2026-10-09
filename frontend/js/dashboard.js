@@ -81,7 +81,11 @@ async function loadDashboard() {
   } catch (e) { setStatus("dashStatus", e.message, true); }
 }
 
-qs("btnLoadDashboard").addEventListener("click", loadDashboard);
+qs("btnLoadDashboard").addEventListener("click", async () => {
+  const done = setLoading("btnLoadDashboard", "Actualizando");
+  try { await loadDashboard(); }
+  finally { done(); }
+});
 
 /* ── Quarterly view ───────────────────────────────────────── */
 
@@ -184,6 +188,7 @@ function renderOccupancyLineChart(stats, containerId) {
 }
 
 qs("btnLoadQuarter").addEventListener("click", async () => {
+  const done = setLoading("btnLoadQuarter", "Cargando");
   try {
     const year = val("qYear");
     const quarter = parseInt(val("qQuarter"));
@@ -195,5 +200,5 @@ qs("btnLoadQuarter").addEventListener("click", async () => {
 
     setStatus("qStatus", "Listo.");
   } catch (e) { setStatus("qStatus", e.message, true); }
+  finally { done(); }
 });
-
