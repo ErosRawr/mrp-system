@@ -12,6 +12,9 @@ This intentionally reuses the same "ledger" pattern already proven in the
 day-level scheduler: CapacityAllocation rows record what's been claimed,
 so the calculation for order N naturally accounts for orders 1..N-1
 processed before it in the same run.
+
+Weekly capacity honors TeamWeekException rows (holidays, maintenance):
+a week's usable capacity is weekly_capacity * capacity_multiplier.
 """
 
 import math
@@ -20,6 +23,7 @@ from sqlalchemy.orm import Session
 import models
 from calculations import calculate_material_requirements
 from heuristics import sort_orders_by_criterion
+from capacity import get_effective_weekly_capacity
 
 
 def _iso_year_week(d: date):
@@ -57,8 +61,9 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                            start_year: int, start_week: int, db: Session):
     """
     Walks forward week by week from (start_year, start_week), consuming
-    whatever weekly capacity is left (after subtracting what other orders
-    already claimed for that team/week), until quantity_needed is covered.
+    whatever weekly capacity is left (after applying that week's
+    exception multiplier and subtracting what other orders already
+    claimed for that team/week), until quantity_needed is covered.
 
     Returns dict: {end_year, end_week, weeks_elapsed, breakdown, fully_scheduled}
     """
@@ -66,8 +71,9 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     if not team:
         return None
 
-    weekly_capacity = team.weekly_capacity
-    if weekly_capacity <= 0:
+    # Guard against a misconfigured team. A multiplier of 0 on a single
+    # week is NOT an error -- that week is simply skipped in the loop.
+    if team.weekly_capacity <= 0:
         return {
             "end_year": start_year,
             "end_week": start_week,
@@ -84,8 +90,9 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     max_iterations = 260  # ~5 years of weeks, safety cap
 
     while remaining_needed > 0 and weeks_elapsed < max_iterations:
+        effective_capacity = get_effective_weekly_capacity(team, year, week, db)
         already_used = _already_allocated_this_week(team_id, year, week, db)
-        free_capacity = max(weekly_capacity - already_used, 0.0)
+        free_capacity = max(effective_capacity - already_used, 0.0)
 
         if free_capacity > 0:
             allocate_this_week = min(free_capacity, remaining_needed)
@@ -94,6 +101,7 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
                 "week_number": week,
                 "allocated": round(allocate_this_week, 2),
                 "free_capacity_before": round(free_capacity, 2),
+                "effective_capacity": round(effective_capacity, 2),
             })
 
             db.add(models.CapacityAllocation(
