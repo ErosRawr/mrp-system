@@ -16,6 +16,14 @@ function toggleOrderMenu(event, orderId) {
 
 document.addEventListener("click", closeAllRowMenus);
 
+/* Label for the backend's lateness_status (same wording as the Planeación tab). */
+function latenessLabel(status) {
+  if (status === "critical") return '<span class="danger-text">🔴 ATRASO CRÍTICO</span>';
+  if (status === "warning") return '<span class="warn-text">⚠ Atrasado</span>';
+  if (status === "on_time") return '<span class="highlight">A tiempo</span>';
+  return "—";
+}
+
 async function loadOrders() {
   const orders = await api("/orders");
   const body = qs("ordersBody");
@@ -30,6 +38,7 @@ async function loadOrders() {
       <td>${o.is_priority ? '<span class="warn-text">★</span>' : "—"}</td>
       <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
       <td>${o.calculated_delivery_date ?? "—"}</td>
+      <td>${latenessLabel(o.lateness_status)}</td>
       <td style="position:relative;">
         <button class="btn small menu-trigger" onclick="toggleOrderMenu(event, ${o.id})">⋯</button>
         <div class="row-menu" id="menu-order-${o.id}">
@@ -112,4 +121,3 @@ qs("btnCreateOrder").addEventListener("click", async () => {
     await loadOrders();
   } catch (e) { setStatus("orderStatus", e.message, true); }
 });
-

@@ -1,5 +1,14 @@
 /* ── Dashboard ────────────────────────────────────────────── */
 
+/* Counts lateness using the backend's lateness_status -- never re-derive it here. */
+function countLateness(orders) {
+  const planned = orders.filter(o => o.lateness_status);
+  const onTime = planned.filter(o => o.lateness_status === "on_time").length;
+  const warning = planned.filter(o => o.lateness_status === "warning").length;
+  const critical = planned.filter(o => o.lateness_status === "critical").length;
+  return { onTime, warning, critical, late: warning + critical };
+}
+
 async function loadDashboard() {
   try {
     const year = val("dashYear");
@@ -16,13 +25,7 @@ async function loadDashboard() {
     const totalOrders = monthOrders.length;
     const totalTonnage = monthOrders.reduce((sum, o) => sum + parseFloat(o.quantity_requested), 0);
 
-    const planned = monthOrders.filter(o => o.calculated_delivery_date);
-    const onTime = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date <= o.requested_delivery_date
-    ).length;
-    const late = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date > o.requested_delivery_date
-    ).length;
+    const { onTime, late, critical } = countLateness(monthOrders);
 
     // Occupancy across all teams for this month
     const occResults = await Promise.all(
@@ -44,7 +47,9 @@ async function loadDashboard() {
     // KPI cards
     const kpis = [
       { label: "Pedidos este mes", value: totalOrders, cls: "" },
-      { label: "A tiempo / Atrasados", value: `${onTime} / ${late}`, cls: late > 0 ? "warn" : "good" },
+      { label: "A tiempo / Atrasados", value: `${onTime} / ${late}`,
+        sub: critical > 0 ? `${critical} crítico(s)` : "",
+        cls: critical > 0 ? "danger" : (late > 0 ? "warn" : "good") },
       { label: "Ocupación promedio", value: `${plantAvgOccupancy}%`, cls: plantAvgOccupancy > 90 ? "danger" : "" },
       { label: "Cuello de botella", value: bottleneck ? bottleneck.team_name : "—",
         sub: bottleneck ? `${bottleneck.overall_occupancy_pct}% ocupación` : "", cls: "warn" },
@@ -81,11 +86,7 @@ async function loadDashboard() {
   } catch (e) { setStatus("dashStatus", e.message, true); }
 }
 
-qs("btnLoadDashboard").addEventListener("click", async () => {
-  const done = setLoading("btnLoadDashboard", "Actualizando");
-  try { await loadDashboard(); }
-  finally { done(); }
-});
+qs("btnLoadDashboard").addEventListener("click", loadDashboard);
 
 /* ── Quarterly view ───────────────────────────────────────── */
 
@@ -102,13 +103,7 @@ async function loadQuarterData(year, quarter) {
     const monthOrders = allOrders.filter(o =>
       String(o.planning_year) === String(year) && String(o.planning_month) === String(month)
     );
-    const planned = monthOrders.filter(o => o.calculated_delivery_date);
-    const onTime = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date <= o.requested_delivery_date
-    ).length;
-    const late = planned.filter(o =>
-      o.requested_delivery_date && o.calculated_delivery_date > o.requested_delivery_date
-    ).length;
+    const { onTime, late } = countLateness(monthOrders);
 
     const occResults = await Promise.all(
       teams.map(t => api(`/teams/${t.id}/occupancy?year=${year}&month=${month}`))
@@ -188,7 +183,6 @@ function renderOccupancyLineChart(stats, containerId) {
 }
 
 qs("btnLoadQuarter").addEventListener("click", async () => {
-  const done = setLoading("btnLoadQuarter", "Cargando");
   try {
     const year = val("qYear");
     const quarter = parseInt(val("qQuarter"));
@@ -200,5 +194,4 @@ qs("btnLoadQuarter").addEventListener("click", async () => {
 
     setStatus("qStatus", "Listo.");
   } catch (e) { setStatus("qStatus", e.message, true); }
-  finally { done(); }
 });

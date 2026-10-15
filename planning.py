@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 import models
 from calculations import calculate_material_requirements
 from heuristics import sort_orders_by_criterion
+from lateness import classify_lateness
 
 
 def _iso_year_week(d: date):
@@ -221,18 +222,9 @@ def _plan_orders_in_sequence(orders, db: Session):
         order.calculated_delivery_date = calculated_delivery_date
         db.add(order)
 
-        is_late = None
-        lateness_status = None
-        days_late = None
-        if order.requested_delivery_date:
-            days_late = (calculated_delivery_date - order.requested_delivery_date).days
-            is_late = days_late > 7
-            if days_late <= 7:
-                lateness_status = "on_time"
-            elif days_late <= 14:
-                lateness_status = "warning"
-            else:
-                lateness_status = "critical"
+        days_late, lateness_status, is_late = classify_lateness(
+            calculated_delivery_date, order.requested_delivery_date
+        )
 
         results.append({
             "order_id": order.id,

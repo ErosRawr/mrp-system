@@ -5,6 +5,7 @@ from datetime import date
 from calculations import calculate_material_requirements
 from planning import run_monthly_planning, compare_planning_criteria
 from mexican_holidays import get_holiday_week_impact
+from lateness import classify_lateness
 
 import models
 from database import engine, get_db
@@ -136,7 +137,29 @@ def create_order(
 
 @app.get("/orders")
 def list_orders(db: Session = Depends(get_db)):
-    return db.query(models.Order).order_by(models.Order.order_date).all()
+    orders = db.query(models.Order).order_by(models.Order.order_date).all()
+    result = []
+    for o in orders:
+        days_late, status, is_late = classify_lateness(
+            o.calculated_delivery_date, o.requested_delivery_date
+        )
+        result.append({
+            "id": o.id,
+            "customer_name": o.customer_name,
+            "quantity_requested": o.quantity_requested,
+            "entry_team_id": o.entry_team_id,
+            "order_date": o.order_date,
+            "requested_delivery_date": o.requested_delivery_date,
+            "planning_year": o.planning_year,
+            "planning_month": o.planning_month,
+            "calculated_delivery_date": o.calculated_delivery_date,
+            "is_priority": o.is_priority,
+            "tipo_pedido": o.tipo_pedido,
+            "days_late": days_late,
+            "lateness_status": status,
+            "is_late": is_late,
+        })
+    return result
 
 
 @app.put("/orders/{order_id}")
