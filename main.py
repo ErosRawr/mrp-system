@@ -478,6 +478,7 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
     weekly_capacity = team.weekly_capacity
     breakdown = []
     total_allocated = 0.0
+    total_capacity = 0.0
 
     for iso_year, iso_week in sorted(all_weeks):
         allocated = (
@@ -503,6 +504,7 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
         multiplier = float(exception.capacity_multiplier) if exception else 1.0
         effective_capacity = weekly_capacity * multiplier
         total_allocated += week_total
+        total_capacity += effective_capacity
 
         breakdown.append({
             "year": iso_year,
@@ -514,7 +516,6 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
             "occupancy_pct": round((week_total / effective_capacity) * 100, 1) if effective_capacity > 0 else None,
         })
 
-    total_capacity = weekly_capacity * len(all_weeks)
     overall_pct = round((total_allocated / total_capacity) * 100, 1) if total_capacity > 0 else None
 
     return {
