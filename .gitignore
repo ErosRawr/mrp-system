@@ -1,4 +1,5 @@
-venv/ 
-__pycache__/ 
-mrp.db 
-server.log 
+venv/
+__pycache__/
+*.pyc
+mrp.db
+server.log

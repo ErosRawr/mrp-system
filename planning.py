@@ -8,13 +8,11 @@ each order through the full team chain and consuming each team's weekly
 capacity bucket as it goes, so later orders see less capacity remaining
 if earlier orders (with earlier requested dates) already claimed it.
 
-This intentionally reuses the same "ledger" pattern already proven in the
-day-level scheduler: CapacityAllocation rows record what's been claimed,
-so the calculation for order N naturally accounts for orders 1..N-1
-processed before it in the same run.
+CapacityAllocation rows act as a ledger of what has been claimed, so the
+calculation for order N naturally accounts for orders 1..N-1 processed
+before it in the same run.
 """
 
-import math
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
 import models

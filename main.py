@@ -1,18 +1,19 @@
+from calendar import monthrange
+from datetime import date, timedelta
+
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from datetime import date
-from calculations import calculate_material_requirements
-from planning import run_monthly_planning, compare_planning_criteria
-from mexican_holidays import get_holiday_week_impact
-from lateness import classify_lateness
+from sqlalchemy.orm import Session
 
 import models
+from calculations import calculate_material_requirements
 from database import engine, get_db
+from lateness import classify_lateness
+from mexican_holidays import get_holiday_week_impact
+from planning import run_monthly_planning, compare_planning_criteria
 
 models.Base.metadata.create_all(bind=engine)
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="MRP System", version="0.2.0")
 
@@ -388,33 +389,6 @@ def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
     return result
 
 
-@app.post("/inventory")
-def set_inventory(
-    team_id: int,
-    quantity_on_hand: float,
-    db: Session = Depends(get_db),
-):
-    existing = db.query(models.Inventory).filter(
-        models.Inventory.team_id == team_id
-    ).first()
-    if existing:
-        existing.quantity_on_hand = quantity_on_hand
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    entry = models.Inventory(team_id=team_id, quantity_on_hand=quantity_on_hand)
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
-    return entry
-
-
-@app.get("/inventory")
-def list_inventory(db: Session = Depends(get_db)):
-    return db.query(models.Inventory).all()
-
-
 @app.post("/planning/run")
 def trigger_monthly_planning(
     year: int, month: int,
@@ -477,20 +451,11 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
     if not team:
         raise HTTPException(404, "Team not found")
 
-    # Determine which ISO weeks fall in this calendar month.
-    from calendar import monthrange
-    from datetime import date as date_cls
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
 
-    first_day = date_cls(year, month, 1)
-    last_day = date_cls(year, month, monthrange(year, month)[1])
-
-    weeks_in_month = sorted(set(
-        first_day.isocalendar()[1] if d == first_day else d.isocalendar()[1]
-        for d in [first_day, last_day]
-    ))
-    # Build the actual set of ISO weeks touched by this month, day by day
-    # (handles months that span into adjacent ISO years/weeks at the edges).
-    from datetime import timedelta
+    # Every ISO (year, week) this calendar month touches, day by day
+    # (handles months that spill into adjacent ISO years/weeks at the edges).
     all_weeks = set()
     d = first_day
     while d <= last_day:

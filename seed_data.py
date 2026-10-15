@@ -17,9 +17,9 @@ All orders enter at Equipo 4 (the bottleneck, weekly capacity ~12,500
 tons with the professor's numbers) so they genuinely compete for the
 same capacity.
 
-Usage:
+Usage (from the project root):
     1. Start the backend:  uvicorn main:app --reload
-    2. Run this script:    python seed_heuristic_demo.py
+    2. Run this script:    python scripts/seed_data.py
 """
 
 import random

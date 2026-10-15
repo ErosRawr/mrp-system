@@ -68,10 +68,6 @@ class TeamWeekException(Base):
         1.0 = full capacity (the default when no exception exists)
         0.0 = fully unavailable that week
         0.8 = e.g. one holiday out of five working days in that week
-
-    Replaces the earlier day-level TeamWeeklySchedule + TeamScheduleException
-    tables, which operated at day granularity and no longer matched the
-    week-level planning model the spec requires.
     """
     __tablename__ = "team_week_exception"
 
@@ -81,14 +77,6 @@ class TeamWeekException(Base):
     week_number = Column(Integer, nullable=False)
     capacity_multiplier = Column(Numeric, nullable=False, default=0)
     reason = Column(String(200), nullable=True)  # e.g. "Día de la Independencia"
-
-
-class Inventory(Base):
-    __tablename__ = "inventory"
-
-    id = Column(Integer, primary_key=True, index=True)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, unique=True)
-    quantity_on_hand = Column(Numeric, nullable=False, default=0)
 
 
 class CapacityAllocation(Base):
