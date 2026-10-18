@@ -47,10 +47,16 @@ function setLoading(buttonId, loadingText = "Cargando") {
   };
 }
 
-async function populateTeamDropdown(selectId) {
+async function populateTeamDropdown(selectId, allLabel = null) {
   const teams = await api("/teams");
   const sel = qs(selectId);
   sel.innerHTML = "";
+  if (allLabel) {
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = allLabel;
+    sel.appendChild(all);
+  }
   teams.forEach(t => {
     const o = document.createElement("option");
     o.value = t.id;
