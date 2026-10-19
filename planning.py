@@ -241,55 +241,136 @@ def _plan_orders_in_sequence(orders, db: Session):
     return results
 
 
-def run_monthly_planning(planning_year: int, planning_month: int, db: Session, criterion: str = "peps"):
-    """
-    The core spec requirement: takes every order registered for
-    (planning_year, planning_month), sorts according to `criterion`, and
-    computes a calculated_delivery_date for each -- walking the full team
-    chain in production order (upstream first), consuming weekly capacity
-    as it goes so orders queue realistically against each other.
+def _month_key_after(query, year: int, month: int, inclusive: bool):
+    """Filters a MonthPlan query to months at/after (year, month), in calendar order."""
+    cmp_month = (models.MonthPlan.planning_month >= month) if inclusive else (models.MonthPlan.planning_month > month)
+    return (
+        query.filter((models.MonthPlan.planning_year > year) |
+                     ((models.MonthPlan.planning_year == year) & cmp_month))
+        .order_by(models.MonthPlan.planning_year, models.MonthPlan.planning_month)
+    )
 
-    criterion selects the sort order orders are PROCESSED in (see
-    heuristics.py): "peps" (pure FIFO by requested date, the default),
-    "prioritario" (priority orders first), or "heuristica" (priority,
-    then tonnage at/above 15k tons, then tipo_pedido rank).
 
-    Writes calculated_delivery_date back onto each Order, and commits
-    CapacityAllocation rows so the run's effects are persisted, not just
-    returned.
-
-    Idempotent: re-running for the same month first clears any
-    CapacityAllocation rows previously committed by an earlier run for
-    that month's orders, so re-running produces a clean result rather
-    than stacking duplicate allocations on top of the old ones.
-    """
-    orders = (
+def _orders_of_month(year: int, month: int, db: Session):
+    return (
         db.query(models.Order)
-        .filter(
-            models.Order.planning_year == planning_year,
-            models.Order.planning_month == planning_month,
-        )
+        .filter(models.Order.planning_year == year, models.Order.planning_month == month)
         .all()
     )
 
-    order_ids = [o.id for o in orders]
+
+def _orders_from_month(year: int, month: int, db: Session):
+    """Every order planned for (year, month) OR any later month."""
+    return (
+        db.query(models.Order)
+        .filter((models.Order.planning_year > year) |
+                ((models.Order.planning_year == year) & (models.Order.planning_month >= month)))
+        .all()
+    )
+
+
+def _clear_allocations(order_ids, db: Session):
     if order_ids:
         db.query(models.CapacityAllocation).filter(
             models.CapacityAllocation.order_id.in_(order_ids)
         ).delete(synchronize_session=False)
         db.flush()
 
-    orders = sort_orders_by_criterion(orders, criterion)
-    results = _plan_orders_in_sequence(orders, db)
 
+def _plan_month(year: int, month: int, criterion: str, db: Session):
+    """Plans ONE month's orders into whatever capacity is currently free.
+    Does not clear anything and does not commit."""
+    orders = sort_orders_by_criterion(_orders_of_month(year, month, db), criterion)
+    return _plan_orders_in_sequence(orders, db)
+
+
+def _replan_months(month_plans, db: Session):
+    """
+    Clears and re-plans the given MonthPlan rows IN CALENDAR ORDER, each with
+    its own saved criterion. Because earlier months are planned first, they
+    always get first claim on capacity. Does not commit.
+    """
+    for mp in month_plans:
+        _clear_allocations([o.id for o in _orders_of_month(mp.planning_year, mp.planning_month, db)], db)
+
+    summaries = []
+    for mp in month_plans:
+        results = _plan_month(mp.planning_year, mp.planning_month, mp.criterion, db)
+        summaries.append({
+            "planning_year": mp.planning_year,
+            "planning_month": mp.planning_month,
+            "criterion": mp.criterion,
+            "orders_planned": len(results),
+            "results": results,
+        })
+    return summaries
+
+
+def run_monthly_planning(planning_year: int, planning_month: int, db: Session, criterion: str = "peps"):
+    """
+    Plans (planning_year, planning_month) with `criterion`.
+
+    Months are processed in calendar order: earlier months get first claim on
+    capacity. So after this month is planned, every LATER month that was
+    already planned is re-planned too (each with its own saved criterion),
+    otherwise its allocations would be stale -- computed before this month
+    existed, or against a different version of it.
+
+    Returns this month's results plus `replanned_months`, a short summary of
+    the later months that were re-planned.
+
+    Idempotent: re-running clears this month's (and later planned months')
+    allocations first, so nothing stacks on top of old allocations.
+    """
+    mp = (
+        db.query(models.MonthPlan)
+        .filter(models.MonthPlan.planning_year == planning_year,
+                models.MonthPlan.planning_month == planning_month)
+        .first()
+    )
+    if mp is None:
+        mp = models.MonthPlan(planning_year=planning_year, planning_month=planning_month, criterion=criterion)
+        db.add(mp)
+    else:
+        mp.criterion = criterion
+    db.flush()
+
+    month_plans = _month_key_after(db.query(models.MonthPlan), planning_year, planning_month, inclusive=True).all()
+    summaries = _replan_months(month_plans, db)
     db.commit()
 
+    this_month = summaries[0]
     return {
         "planning_year": planning_year,
         "planning_month": planning_month,
         "criterion": criterion,
-        "orders_planned": len(results),
-        "results": results,
+        "orders_planned": this_month["orders_planned"],
+        "results": this_month["results"],
+        "replanned_months": [
+            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned")}
+            for s in summaries[1:]
+        ],
+    }
+
+
+def replan_all(db: Session):
+    """
+    Re-plans every planned month from the earliest one, in order, with each
+    month's saved criterion. Use after anything that changes capacity or
+    availability (week exceptions, holidays, disruptions, team edits).
+    """
+    month_plans = (
+        db.query(models.MonthPlan)
+        .order_by(models.MonthPlan.planning_year, models.MonthPlan.planning_month)
+        .all()
+    )
+    summaries = _replan_months(month_plans, db)
+    db.commit()
+    return {
+        "months_replanned": [
+            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned")}
+            for s in summaries
+        ]
     }
 
 
@@ -301,37 +382,31 @@ def compare_planning_criteria(planning_year: int, planning_month: int, db: Sessi
     out before choosing one to actually run for real (via
     run_monthly_planning, which does commit).
 
-    Each criterion is evaluated against a clean slate: prior
-    CapacityAllocation rows for that month's orders are cleared (within
-    the uncommitted transaction) before each criterion runs, so criteria
-    don't bleed into each other's results. The whole comparison is rolled
-    back at the end -- nothing is persisted by this function.
+    The comparison sees only the capacity left by EARLIER months, exactly as
+    the real run will: this month's allocations AND those of every later
+    month are cleared (inside the uncommitted transaction) before each
+    criterion runs. Later months therefore cannot distort the result, and
+    criteria do not bleed into each other. Everything is rolled back at the
+    end -- nothing is persisted by this function.
+
+    `later_planned_months` lists the months that WOULD be re-planned if you
+    commit one of these criteria.
     """
     if criteria is None:
         criteria = ["peps", "prioritario", "heuristica"]
 
-    orders = (
-        db.query(models.Order)
-        .filter(
-            models.Order.planning_year == planning_year,
-            models.Order.planning_month == planning_month,
-        )
-        .all()
-    )
-    order_ids = [o.id for o in orders]
+    later_planned = [
+        {"planning_year": mp.planning_year, "planning_month": mp.planning_month, "criterion": mp.criterion}
+        for mp in _month_key_after(db.query(models.MonthPlan), planning_year, planning_month, inclusive=False).all()
+    ]
+    affected_ids = [o.id for o in _orders_from_month(planning_year, planning_month, db)]
 
     comparison = {}
 
     try:
         for criterion in criteria:
-            if order_ids:
-                db.query(models.CapacityAllocation).filter(
-                    models.CapacityAllocation.order_id.in_(order_ids)
-                ).delete(synchronize_session=False)
-                db.flush()
-
-            sorted_orders = sort_orders_by_criterion(orders, criterion)
-            results = _plan_orders_in_sequence(sorted_orders, db)
+            _clear_allocations(affected_ids, db)
+            results = _plan_month(planning_year, planning_month, criterion, db)
 
             on_time = sum(1 for r in results if r.get("lateness_status") == "on_time")
             warning = sum(1 for r in results if r.get("lateness_status") == "warning")
@@ -355,5 +430,6 @@ def compare_planning_criteria(planning_year: int, planning_month: int, db: Sessi
         "planning_year": planning_year,
         "planning_month": planning_month,
         "criteria_compared": criteria,
+        "later_planned_months": later_planned,
         "comparison": comparison,
     }

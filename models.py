@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, ForeignKey, UniqueConstraint
 from database import Base
 
 
@@ -11,6 +11,12 @@ class Team(Base):
     monthly_capacity = Column(Numeric, nullable=False)  # "Capacidad Mensual"
     weeks_available = Column(Integer, nullable=False, default=4)  # "Disponibilidad"
     efficiency = Column(Numeric, nullable=False)  # "Rendimiento", e.g. 0.95 = 95%
+
+    # Share of normal capacity that still runs on a mandatory holiday:
+    #   0.0 = the team stops completely (a holiday removes 1/working_days of the week)
+    #   1.0 = continuous operation, holidays do not reduce capacity at all
+    #   0.5 = skeleton crew (half the day's capacity)
+    holiday_staffing = Column(Numeric, nullable=False, default=0)
 
     @property
     def weekly_capacity(self):
@@ -94,3 +100,19 @@ class CapacityAllocation(Base):
     year = Column(Integer, nullable=False)
     week_number = Column(Integer, nullable=False)  # ISO week number
     quantity_allocated = Column(Numeric, nullable=False)
+
+
+class MonthPlan(Base):
+    """
+    Which criterion each planned month was last run with. Months are
+    planned in calendar order (earlier months get capacity first), so when
+    a month is re-run, every LATER planned month has to be re-planned too.
+    This table is what lets that happen with each month's own criterion.
+    """
+    __tablename__ = "month_plan"
+    __table_args__ = (UniqueConstraint("planning_year", "planning_month", name="uq_month_plan"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    planning_year = Column(Integer, nullable=False)
+    planning_month = Column(Integer, nullable=False)  # 1-12
+    criterion = Column(String(20), nullable=False)

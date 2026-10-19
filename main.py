@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 import models
 from calculations import calculate_material_requirements
 from database import engine, get_db
+from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP, DEFAULT_MAX_DROP
 from lateness import classify_lateness
 from mexican_holidays import get_holiday_week_impact
-from planning import run_monthly_planning, compare_planning_criteria
+from planning import run_monthly_planning, compare_planning_criteria, replan_all
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -43,8 +44,11 @@ def create_team(
     monthly_capacity: float,
     efficiency: float,
     weeks_available: int = 4,
+    holiday_staffing: float = 0.0,
     db: Session = Depends(get_db),
 ):
+    if not (0 <= holiday_staffing <= 1):
+        raise HTTPException(400, "holiday_staffing must be between 0 (team stops on holidays) and 1 (runs normally)")
     if monthly_capacity <= 0:
         raise HTTPException(400, "monthly_capacity must be greater than 0 -- a team with no capacity can never produce anything")
     if weeks_available <= 0:
@@ -62,6 +66,7 @@ def create_team(
         monthly_capacity=monthly_capacity,
         weeks_available=weeks_available,
         efficiency=efficiency,
+        holiday_staffing=holiday_staffing,
     )
     db.add(team)
     db.commit()
@@ -83,6 +88,7 @@ def list_teams(db: Session = Depends(get_db)):
             "weeks_available": t.weeks_available,
             "weekly_capacity": t.weekly_capacity,
             "efficiency": float(t.efficiency),
+            "holiday_staffing": float(t.holiday_staffing),
         }
         for t in teams
     ]
@@ -308,6 +314,38 @@ def delete_week_exception(exception_id: int, db: Session = Depends(get_db)):
     return {"status": "deleted", "id": exception_id}
 
 
+def _reduce_week_capacity(db: Session, team_id: int, year: int, week_number: int,
+                          reduction: float, reason: str, tag: str):
+    """
+    Lowers one team-week's capacity_multiplier by `reduction`, stacking on any
+    existing exception (a 0.9 maintenance week plus a 0.2 holiday -> 0.7).
+
+    Returns the row, or None when the week's reason already contains `tag`:
+    that cause was applied before, so re-running an import or a generator
+    does not stack it a second time.
+    """
+    existing = db.query(models.TeamWeekException).filter(
+        models.TeamWeekException.team_id == team_id,
+        models.TeamWeekException.year == year,
+        models.TeamWeekException.week_number == week_number,
+    ).first()
+
+    if existing:
+        if existing.reason and tag in existing.reason:
+            return None
+        existing.capacity_multiplier = max(float(existing.capacity_multiplier) - reduction, 0.0)
+        existing.reason = f"{existing.reason}; {reason}" if existing.reason else reason
+        db.add(existing)
+        return existing
+
+    entry = models.TeamWeekException(
+        team_id=team_id, year=year, week_number=week_number,
+        capacity_multiplier=max(1.0 - reduction, 0.0), reason=reason,
+    )
+    db.add(entry)
+    return entry
+
+
 @app.post("/team-week-exceptions/import-mexican-holidays")
 def import_mexican_holidays(
     team_id: int,
@@ -317,14 +355,16 @@ def import_mexican_holidays(
 ):
     """
     Generates TeamWeekException rows for every Mexican federal holiday in
-    the given year, for the given team. Each holiday reduces that week's
-    capacity_multiplier proportionally: one holiday in a 5-day working
-    week -> multiplier 0.8 (4/5 of the week remains available). Multiple
-    holidays in the same week stack (rare, but handled).
+    the given year, for the given team.
 
-    If a week already has an exception set, this ADDS to the reduction
-    rather than overwriting -- e.g. a week with an existing 0.9 multiplier
-    (partial maintenance) and a holiday would become 0.9 - 0.2 = 0.7.
+    How much a holiday costs depends on the team's `holiday_staffing`:
+    the share of a normal day's capacity that still runs on a holiday.
+        staffing 0.0 (team stops)    -> one holiday in a 5-day week = multiplier 0.8
+        staffing 0.5 (skeleton crew) -> multiplier 0.9
+        staffing 1.0 (continuous)    -> no change, no row created
+    Multiple holidays in the same week stack. If a week already has an
+    exception, the reduction is ADDED to it. Re-running is safe: a holiday
+    already recorded in a week's reason is not applied twice.
     """
     team = db.query(models.Team).filter(models.Team.id == team_id).first()
     if not team:
@@ -334,35 +374,18 @@ def import_mexican_holidays(
     if working_days_per_week <= 0:
         raise HTTPException(400, "working_days_per_week must be greater than 0")
 
+    staffing = float(team.holiday_staffing)
+    reduction_per_holiday = (1.0 / working_days_per_week) * (1.0 - staffing)
     holiday_impact = get_holiday_week_impact(year, working_days_per_week)
-    reduction_per_holiday = 1.0 / working_days_per_week
 
     created = []
-    for (iso_year, iso_week), descriptions in holiday_impact.items():
-        reduction = min(reduction_per_holiday * len(descriptions), 1.0)
-
-        existing = db.query(models.TeamWeekException).filter(
-            models.TeamWeekException.team_id == team_id,
-            models.TeamWeekException.year == iso_year,
-            models.TeamWeekException.week_number == iso_week,
-        ).first()
-
-        reason_text = ", ".join(descriptions)
-
-        if existing:
-            new_multiplier = max(float(existing.capacity_multiplier) - reduction, 0.0)
-            existing.capacity_multiplier = new_multiplier
-            existing.reason = f"{existing.reason}; {reason_text}" if existing.reason else reason_text
-            db.add(existing)
-            created.append(existing)
-        else:
-            new_multiplier = max(1.0 - reduction, 0.0)
-            entry = models.TeamWeekException(
-                team_id=team_id, year=iso_year, week_number=iso_week,
-                capacity_multiplier=new_multiplier, reason=reason_text,
-            )
-            db.add(entry)
-            created.append(entry)
+    if reduction_per_holiday > 0:
+        for (iso_year, iso_week), descriptions in holiday_impact.items():
+            reduction = min(reduction_per_holiday * len(descriptions), 1.0)
+            reason_text = ", ".join(descriptions)
+            entry = _reduce_week_capacity(db, team_id, iso_year, iso_week, reduction, reason_text, reason_text)
+            if entry is not None:
+                created.append(entry)
 
     db.commit()
     for entry in created:
@@ -371,7 +394,71 @@ def import_mexican_holidays(
     return {
         "team_id": team_id,
         "year": year,
+        "holiday_staffing": staffing,
         "holidays_imported": len(created),
+        "exceptions": created,
+    }
+
+
+@app.post("/team-week-exceptions/generate-disruptions")
+def generate_disruptions(
+    year: int,
+    probability: float = DEFAULT_PROBABILITY,
+    min_drop: float = DEFAULT_MIN_DROP,
+    max_drop: float = DEFAULT_MAX_DROP,
+    seed: int = None,
+    team_id: int = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Random productivity drops. Every team (or just `team_id`) has a
+    `probability` chance (default 10%) of a drop in each ISO week of `year`;
+    a hit removes between `min_drop` and `max_drop` of that week's capacity
+    (default 10% to 40%). Hits are stored as ordinary week exceptions, so the
+    calendar, occupancy and planner all see them.
+
+    Pass `seed` to make the draw reproducible. Re-running with the same seed
+    changes nothing (weeks already hit are skipped); a different seed adds the
+    new weeks it picks. Plans already committed do not know about new
+    exceptions -- call POST /planning/replan-all afterwards.
+    """
+    if not (0 <= probability <= 1):
+        raise HTTPException(400, "probability must be between 0 and 1, e.g. 0.10 for 10%")
+    if not (0 < min_drop <= max_drop <= 1):
+        raise HTTPException(400, "drops must satisfy 0 < min_drop <= max_drop <= 1")
+    if not (1970 <= year <= 2200):
+        raise HTTPException(400, "year must be a realistic calendar year (1970-2200)")
+
+    if team_id is not None:
+        if not db.query(models.Team).filter(models.Team.id == team_id).first():
+            raise HTTPException(404, "Team not found")
+        team_ids = [team_id]
+    else:
+        team_ids = [t.id for t in db.query(models.Team).order_by(models.Team.sequence_order).all()]
+
+    hits = draw_disruptions(team_ids, probability, min_drop, max_drop, seed=seed)
+
+    created = []
+    for tid, week, drop in hits:
+        reason = f"Baja de productividad (-{round(drop * 100)}%)"
+        entry = _reduce_week_capacity(db, tid, year, week, drop, reason, "Baja de productividad")
+        if entry is not None:
+            created.append(entry)
+
+    db.commit()
+    for entry in created:
+        db.refresh(entry)
+
+    by_team = {}
+    for entry in created:
+        by_team[entry.team_id] = by_team.get(entry.team_id, 0) + 1
+
+    return {
+        "year": year,
+        "probability": probability,
+        "seed": seed,
+        "weeks_affected": len(created),
+        "by_team": by_team,
         "exceptions": created,
     }
 
@@ -429,6 +516,31 @@ def compare_planning(year: int, month: int, db: Session = Depends(get_db)):
 
     result = compare_planning_criteria(year, month, db)
     return result
+
+
+@app.post("/planning/replan-all")
+def replan_everything(db: Session = Depends(get_db)):
+    """
+    Re-plans every planned month from the earliest one, in calendar order,
+    each with the criterion it was last run with. Use it after changing
+    availability (week exceptions, holidays, disruptions, team capacity),
+    because plans already committed do not update on their own.
+    """
+    return replan_all(db)
+
+
+@app.get("/planning/months")
+def list_planned_months(db: Session = Depends(get_db)):
+    """The months that have been planned, and the criterion each was run with."""
+    rows = (
+        db.query(models.MonthPlan)
+        .order_by(models.MonthPlan.planning_year, models.MonthPlan.planning_month)
+        .all()
+    )
+    return [
+        {"planning_year": r.planning_year, "planning_month": r.planning_month, "criterion": r.criterion}
+        for r in rows
+    ]
 
 
 @app.get("/teams/{team_id}/capacity-allocations")
