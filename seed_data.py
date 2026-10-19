@@ -16,6 +16,10 @@ Plant model used to size everything:
     Slack >= 0 is reachable on a quiet plant; negative slack is a rush the
     plant cannot meet no matter what.
 
+Availability: each team runs on Mexican holidays according to its
+holiday_staffing, and every team has a 10% chance per week of a productivity
+drop (seeded, so the demo is reproducible).
+
 September and the rest of the year are all created at Equipo 4 (the entry
 point of the bottleneck) so every order genuinely competes for its capacity.
 
@@ -30,6 +34,7 @@ from datetime import date, timedelta
 
 BASE = "http://localhost:8000"
 YEAR, MONTH = 2026, 9           # MONTH = the month left for the live demo
+DISRUPTION_SEED = 10            # fixes WHICH team-weeks the random productivity drops hit
 
 random.seed(7)  # reproducible -- same orders every run
 
@@ -59,17 +64,28 @@ def post(path, params, label=None, quiet=False):
 # Equipo 4 stays the bottleneck (25,000 t/week); upstream teams have headroom.
 
 TEAMS = [
-    {"name": "Equipo 1", "sequence_order": 1, "monthly_capacity": 260000, "efficiency": 0.98},
-    {"name": "Equipo 2", "sequence_order": 2, "monthly_capacity": 200000, "efficiency": 0.95},
-    {"name": "Equipo 3", "sequence_order": 3, "monthly_capacity": 160000, "efficiency": 0.92},
-    {"name": "Equipo 4", "sequence_order": 4, "monthly_capacity": 100000, "efficiency": 0.96},
+    {"name": "Equipo 1", "sequence_order": 1, "monthly_capacity": 260000, "efficiency": 0.98, "holiday_staffing": 1.0},
+    {"name": "Equipo 2", "sequence_order": 2, "monthly_capacity": 200000, "efficiency": 0.95, "holiday_staffing": 1.0},
+    {"name": "Equipo 3", "sequence_order": 3, "monthly_capacity": 160000, "efficiency": 0.92, "holiday_staffing": 0.5},
+    {"name": "Equipo 4", "sequence_order": 4, "monthly_capacity": 100000, "efficiency": 0.96, "holiday_staffing": 0.0},
 ]
+# holiday_staffing = share of normal capacity that still runs on a mandatory
+# holiday. A steelworks is a continuous process, so the upstream teams keep
+# running (1.0), the middle team runs a reduced crew (0.5) and the finishing
+# team at the end of the route stops (0.0). These are PLACEHOLDERS -- confirm
+# the real figures for the plant being modeled.
 
 print("Creando equipos...")
 team_ids = {}
 for t in TEAMS:
     data = post("/teams", t, f"Equipo creado: {t['name']}")
     if data:
+        if "holiday_staffing" not in data:
+            raise SystemExit(
+                "El servidor no conoce holiday_staffing: sigue corriendo el backend viejo.\n"
+                "Copia los archivos nuevos (main.py, models.py, planning.py, disruptions.py) a la raiz del proyecto,\n"
+                "borra mrp.db, reinicia uvicorn y vuelve a correr este script."
+            )
         team_ids[t["name"]] = data["id"]
         counts["teams"] += 1
 print()
@@ -213,17 +229,33 @@ for month in range(1, 13):
 print(f"  {counts['orders'] - len(SEPTEMBER_ORDERS)} pedidos.")
 print()
 
-# -- 4. Holidays for Equipo 4 (a holiday week runs at 80% capacity).
+# -- 4. Availability: Mexican holidays (each team according to its
+# holiday_staffing) and random productivity drops (10% chance per team per
+# week). Both are stored as week exceptions BEFORE any month is planned, so
+# every plan already accounts for them.
 
-print("Importando dias festivos para Equipo 4...")
-post("/team-week-exceptions/import-mexican-holidays",
-     {"team_id": ENTRY_TEAM, "year": YEAR}, "Equipo 4: festivos importados")
+print("Importando dias festivos (segun la operacion en festivos de cada equipo)...")
+for t in TEAMS:
+    data = post("/team-week-exceptions/import-mexican-holidays",
+                {"team_id": team_ids[t["name"]], "year": YEAR})
+    if data:
+        staffing = round(data["holiday_staffing"] * 100)
+        if data["holidays_imported"]:
+            print(f"  {t['name']}: opera al {staffing}% en festivos -> {data['holidays_imported']} semanas con capacidad reducida")
+        else:
+            print(f"  {t['name']}: opera al {staffing}% en festivos -> sin reduccion (proceso continuo)")
+print()
+
+print("Generando interrupciones aleatorias (10% por equipo y semana, semilla fija)...")
+disruptions = post("/team-week-exceptions/generate-disruptions", {"year": YEAR, "seed": DISRUPTION_SEED})
+if disruptions:
+    print(f"  {disruptions['weeks_affected']} semanas de equipo afectadas: {disruptions['by_team']}")
 print()
 
 # -- 5. Plan every month EXCEPT September, in order, with PEPS. September
-# stays unplanned for the live demo. Its comparison is not distorted by the
-# other months: October's orders only reach the bottleneck after Oct 19,
-# and September's work is finished by then under all three criteria.
+# stays unplanned for the live demo. The comparison only ever sees capacity
+# left by EARLIER months, and committing September re-plans the later months,
+# so having Oct-Dec planned already does not distort anything.
 
 print("Ejecutando planeacion mensual (PEPS), todos los meses menos septiembre...")
 for month in range(1, 13):
@@ -244,11 +276,13 @@ print("--- Seed completo ---")
 print(f"Equipos: {counts['teams']}")
 print(f"Pedidos: {counts['orders']} ({len(SEPTEMBER_ORDERS)} de septiembre + {counts['orders'] - len(SEPTEMBER_ORDERS)} del resto del ano)")
 print(f"Planeacion (PEPS) ejecutada para todos los meses excepto {YEAR}-{MONTH:02d}.")
+if disruptions:
+    print(f"Disponibilidad: festivos de cada equipo + {disruptions['weeks_affected']} semanas con baja de productividad (Disponibilidad / Calendario).")
 print()
 print("Guion de la demo:")
 print(f"  1. Heuristica -> Comparar el mes {YEAR}-{MONTH:02d} (no guarda nada). Busca:")
 print('     - "Urgente Tardio": primero en PEPS, casi al final en Heuristica')
 print('     - "Cliente VIP": critico en PEPS, primero en Prioritario y Heuristica')
 print('     - "Pedido Grande" y "Gran Obra Federal": atrasados en PEPS, rescatados por Heuristica')
-print("  2. Elige un criterio y pulsa Ejecutar y guardar para septiembre.")
+print("  2. Elige un criterio y pulsa Ejecutar y guardar para septiembre (octubre a diciembre se replanean solos).")
 print(f"  3. Dashboard: usa el mes 8 (o cualquier mes menos {MONTH}) para ver datos antes del paso 2.")

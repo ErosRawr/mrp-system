@@ -16,7 +16,15 @@ def snapshot():
 
 
 before = snapshot()
-months = requests.post(f"{BASE}/planning/replan-all").json()["months_replanned"]
+response = requests.post(f"{BASE}/planning/replan-all")
+if response.status_code == 404:
+    raise SystemExit(
+        "The server has no /planning/replan-all endpoint: it is still running the old backend.\n"
+        "Copy the updated main.py, models.py, planning.py and disruptions.py into the project root,\n"
+        "delete mrp.db, restart uvicorn, and run scripts/seed_data.py again."
+    )
+response.raise_for_status()
+months = response.json()["months_replanned"]
 after = snapshot()
 
 changed = [i for i in before if before[i] != after[i]]
