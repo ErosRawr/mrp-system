@@ -741,3 +741,156 @@
   #view-dashboard .dashboard-period { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #view-dashboard .dashboard-period .btn { grid-column: 1 / -1; }
 }
+
+
+/* ── Production teams workspace ─────────────────────────── */
+#view-teams {
+  --teams-bg: #0f1215;
+  --teams-surface: #171b1f;
+  --teams-raised: #1d2226;
+  --teams-border: #262c31;
+  --teams-text: #e8edf0;
+  --teams-muted: #9aa4ab;
+  --teams-accent: #4a9eda;
+  color: var(--teams-text);
+}
+
+#view-teams h1 {
+  color: var(--teams-text);
+  font-size: 1.55rem;
+  letter-spacing: -.025em;
+  margin-bottom: .35rem;
+}
+
+#view-teams .teams-header { margin-bottom: 1.25rem; }
+
+#view-teams .teams-eyebrow {
+  color: var(--teams-accent);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  margin-bottom: .35rem;
+}
+
+#view-teams .view-desc,
+#view-teams .section-description {
+  color: var(--teams-muted);
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+#view-teams .teams-form-panel {
+  background: var(--teams-surface);
+  border: 1px solid var(--teams-border);
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  margin-bottom: 1.4rem;
+  padding: 1.1rem 1.2rem;
+}
+
+#view-teams .teams-section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: .95rem;
+}
+
+#view-teams .teams-section-heading h2 {
+  color: var(--teams-text);
+  font-size: .98rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+#view-teams .section-description { font-size: .76rem; margin-top: .2rem; }
+
+#view-teams .teams-form-grid {
+  display: grid;
+  gap: .9rem 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#view-teams .teams-form-grid .field { min-width: 0; }
+
+#view-teams .teams-form-grid .field label {
+  color: var(--teams-muted);
+  font-size: .74rem;
+  font-weight: 600;
+}
+
+#view-teams .teams-form-grid .field input {
+  background: var(--teams-bg);
+  border: 1px solid #3b434a;
+  border-radius: 5px;
+  color: var(--teams-text);
+  min-width: 0;
+  padding: .55rem .65rem;
+}
+
+#view-teams .teams-form-grid .field input:focus {
+  border-color: var(--teams-accent);
+  box-shadow: 0 0 0 3px rgba(74, 158, 218, .14);
+}
+
+#view-teams .teams-form-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  grid-column: 1 / -1;
+  margin-top: .15rem;
+}
+
+#view-teams .teams-form-actions .btn {
+  background: #2d5f80;
+  border: 1px solid var(--teams-accent);
+  border-radius: 5px;
+  height: 36px;
+  padding: .45rem 1rem;
+}
+
+#view-teams .teams-form-actions .btn:hover { background: var(--teams-accent); }
+#view-teams .teams-form-actions .status { margin: 0; }
+
+#view-teams .teams-list-section { margin-top: 1.3rem; }
+
+#view-teams .teams-table-wrap {
+  background: var(--teams-surface);
+  border: 1px solid var(--teams-border);
+  border-radius: 9px;
+  overflow-x: auto;
+}
+
+#view-teams table {
+  font-size: .82rem;
+  min-width: 900px;
+}
+
+#view-teams th {
+  background: var(--teams-raised);
+  border-bottom: 1px solid var(--teams-border);
+  color: var(--teams-muted);
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .75rem .8rem;
+  white-space: nowrap;
+}
+
+#view-teams td {
+  border-bottom: 1px solid #1e2328;
+  color: var(--teams-text);
+  padding: .78rem .8rem;
+}
+
+#view-teams tr:last-child td { border-bottom: 0; }
+#view-teams tr:hover td { background: var(--teams-raised); }
+
+@media (max-width: 900px) {
+  #view-teams .teams-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  #view-teams .teams-form-panel { padding: .9rem; }
+  #view-teams .teams-form-grid { grid-template-columns: 1fr; }
+  #view-teams .teams-form-actions { align-items: flex-start; flex-direction: column; }
+}
