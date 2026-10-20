@@ -4,6 +4,7 @@ let editingOrderId = null;
 
 function closeAllRowMenus() {
   document.querySelectorAll(".row-menu.open").forEach(m => m.classList.remove("open"));
+  document.querySelectorAll(".menu-trigger[aria-expanded='true']").forEach(button => button.setAttribute("aria-expanded", "false"));
 }
 
 function toggleOrderMenu(event, orderId) {
@@ -12,6 +13,7 @@ function toggleOrderMenu(event, orderId) {
   const wasOpen = menu.classList.contains("open");
   closeAllRowMenus();
   if (!wasOpen) menu.classList.add("open");
+  event.currentTarget.setAttribute("aria-expanded", String(!wasOpen));
 }
 
 document.addEventListener("click", closeAllRowMenus);
@@ -39,8 +41,8 @@ async function loadOrders() {
       <td>${o.planning_year}-${String(o.planning_month).padStart(2,"0")}</td>
       <td>${o.calculated_delivery_date ?? "—"}</td>
       <td>${latenessLabel(o.lateness_status)}</td>
-      <td style="position:relative;">
-        <button class="btn small menu-trigger" onclick="toggleOrderMenu(event, ${o.id})">⋯</button>
+      <td class="orders-actions-cell">
+        <button type="button" class="btn small menu-trigger" aria-label="Acciones del pedido ${o.id}" aria-expanded="false" aria-controls="menu-order-${o.id}" title="Editar o eliminar pedido" onclick="toggleOrderMenu(event, ${o.id})">⋯</button>
         <div class="row-menu" id="menu-order-${o.id}">
           <button onclick="startEditOrder(${o.id}); closeAllRowMenus();">Editar</button>
           <button class="danger" onclick="deleteOrderRow(${o.id}); closeAllRowMenus();">Eliminar</button>
