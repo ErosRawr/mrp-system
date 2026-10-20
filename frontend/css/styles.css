@@ -1088,3 +1088,62 @@
   #view-orders .orders-form-actions { align-items: flex-start; flex-direction: column; }
   #view-orders .orders-form-actions .btn { width: 100%; }
 }
+
+
+/* Keep row actions visible in the horizontally scrolling orders table. */
+#view-orders th:last-child,
+#view-orders .orders-actions-cell {
+  position: sticky;
+  right: 0;
+  text-align: center;
+  width: 64px;
+  min-width: 64px;
+}
+
+#view-orders th:last-child {
+  background: var(--orders-raised);
+  z-index: 3;
+}
+
+#view-orders .orders-actions-cell {
+  background: var(--orders-surface);
+  box-shadow: -8px 0 12px rgba(0, 0, 0, .16);
+  overflow: visible;
+  z-index: 2;
+}
+
+#view-orders tr:hover .orders-actions-cell { background: var(--orders-raised); }
+
+#view-orders .menu-trigger {
+  align-items: center;
+  background: #252c31;
+  border: 1px solid #56616a;
+  border-radius: 6px;
+  color: #e8edf0;
+  display: inline-flex;
+  font-size: 1.2rem;
+  height: 30px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 34px;
+  padding: 0 .35rem .2rem;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+#view-orders .menu-trigger:hover,
+#view-orders .menu-trigger[aria-expanded="true"] {
+  background: #35434d;
+  border-color: var(--orders-accent);
+  color: #fff;
+}
+
+#view-orders .menu-trigger:focus-visible {
+  outline: 2px solid var(--orders-accent);
+  outline-offset: 2px;
+}
+
+#view-orders .orders-actions-cell .row-menu {
+  right: 0;
+  top: calc(100% - 2px);
+  z-index: 5;
+}
