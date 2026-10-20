@@ -48,15 +48,20 @@ async function loadDashboard() {
       }
     });
 
+    // Show schedule status separately from calendar-week occupancy. A month can
+    // be unplanned while weeks it touches still contain allocations from adjacent months.
+    const plannedOrderCount = monthOrders.filter(o => o.lateness_status).length;
+    const unplannedOrderCount = totalOrders - plannedOrderCount;
+
     // KPI cards
     const kpis = [
       { label: "Pedidos este mes", value: totalOrders, cls: "" },
-      { label: "A tiempo / Atrasados", value: `${onTime} / ${late}`,
-        sub: critical > 0 ? `${critical} crítico(s)` : "",
-        cls: critical > 0 ? "danger" : (late > 0 ? "warn" : "good") },
-      { label: "Ocupación promedio", value: `${plantAvgOccupancy}%`, cls: plantAvgOccupancy > 90 ? "danger" : "" },
-      { label: "Cuello de botella", value: bottleneck ? bottleneck.team_name : "—",
-        sub: bottleneck ? `${bottleneck.overall_occupancy_pct}% ocupación` : "", cls: "warn" },
+      { label: "A tiempo / Atrasados", value: plannedOrderCount ? `${onTime} / ${late}` : "— / —",
+        sub: `${plannedOrderCount} planeados · ${unplannedOrderCount} sin planear${critical > 0 ? ` · ${critical} críticos` : ""}`,
+        cls: critical > 0 ? "danger" : (late > 0 || unplannedOrderCount > 0 ? "warn" : "good") },
+      { label: "Ocupación semanal promedio", value: `${plantAvgOccupancy}%`, sub: "Semanas que tocan el mes", cls: plantAvgOccupancy > 90 ? "danger" : "" },
+      { label: "Equipo con mayor carga", value: bottleneck ? bottleneck.team_name : "—",
+        sub: bottleneck ? `${bottleneck.overall_occupancy_pct}% ocupación semanal` : "", cls: "warn" },
       { label: "Tonelaje total", value: totalTonnage.toLocaleString(undefined, {maximumFractionDigits: 0}), sub: "ton solicitadas", cls: "" },
     ];
 
@@ -72,8 +77,8 @@ async function loadDashboard() {
       grid.appendChild(card);
     });
 
-    // Per-team occupancy summary. Distinguish an unplanned month from a
-    // planned month where a team simply has no work assigned.
+    // Occupancy is calculated by ISO calendar week, so reservations from
+    // neighboring planning months can use weeks that overlap this month.
     const body = qs("dashOccBody");
     body.innerHTML = "";
     occResults.forEach(o => {
@@ -87,17 +92,12 @@ async function loadDashboard() {
           Number(week.occupancy_pct ?? 0) > Number(max?.occupancy_pct ?? -1) ? week : max,
           null
         );
-
-      let occupancyLabel = "Sin planear";
-      let busiestWeekLabel = "Sin planear";
-      if (isMonthPlanned) {
-        occupancyLabel = o.overall_occupancy_pct == null
-          ? "Sin datos de capacidad"
-          : `${Number(o.overall_occupancy_pct).toFixed(1)}% (${Math.round(allocatedTonnage).toLocaleString()} t asignadas)`;
-        busiestWeekLabel = busiestWeek
-          ? `Semana ${busiestWeek.week_number} (${busiestWeek.occupancy_pct ?? "—"}%)`
-          : "Sin carga asignada";
-      }
+      const occupancyLabel = o.overall_occupancy_pct == null
+        ? "Sin datos de capacidad"
+        : `${Number(o.overall_occupancy_pct).toFixed(1)}% (${Math.round(allocatedTonnage).toLocaleString()} t asignadas)`;
+      const busiestWeekLabel = busiestWeek
+        ? `Semana ${busiestWeek.week_number} (${busiestWeek.occupancy_pct ?? "—"}%)`
+        : "Sin carga asignada";
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -107,7 +107,9 @@ async function loadDashboard() {
       body.appendChild(tr);
     });
 
-    setStatus("dashStatus", "Listo.");
+    setStatus("dashStatus", isMonthPlanned
+      ? (unplannedOrderCount > 0 ? `Listo. ${unplannedOrderCount} pedido(s) aún sin planear.` : "Listo.")
+      : "Sin planeación guardada para el mes. La ocupación muestra carga en semanas que se cruzan con otros meses.");
   } catch (e) { setStatus("dashStatus", e.message, true); }
 }
 
