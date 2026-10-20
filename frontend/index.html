@@ -247,26 +247,85 @@
       </div>
     </section>
 
+    <section class="orders-filter-panel" aria-label="Filtrar pedidos">
+      <div class="orders-filter-grid">
+        <div class="field">
+          <label for="fYear">Año</label>
+          <input id="fYear" type="number" value="2026" />
+        </div>
+        <div class="field">
+          <label for="fMonth">Mes</label>
+          <select id="fMonth"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label for="fSearch">Buscar cliente</label>
+          <input id="fSearch" type="search" placeholder="Nombre del cliente…" />
+        </div>
+        <div class="field">
+          <label for="fTipo">Tipo</label>
+          <select id="fTipo">
+            <option value="">Todos</option>
+            <option value="comercial">Comercial</option>
+            <option value="galvanizado">Galvanizado</option>
+            <option value="perfiles">Perfiles</option>
+            <option value="perfileros">Perfileros</option>
+            <option value="tuberia">Tubería</option>
+            <option value="ojalatero">Ojalatero</option>
+            <option value="especial">Especial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fStatus">Estado</label>
+          <select id="fStatus">
+            <option value="">Todos</option>
+            <option value="on_time">A tiempo</option>
+            <option value="warning">Atrasado</option>
+            <option value="critical">Crítico</option>
+            <option value="unplanned">Sin planear</option>
+          </select>
+        </div>
+        <label class="orders-filter-priority" for="fPriority">
+          <input id="fPriority" type="checkbox" />
+          <span>Solo prioritarios</span>
+        </label>
+      </div>
+    </section>
+
+    <div class="summary-box orders-summary" id="ordersSummary" role="status" aria-live="polite"></div>
+
     <section class="orders-list-section" aria-labelledby="ordersListTitle">
       <div class="orders-section-heading">
         <div>
           <h2 id="ordersListTitle">Pedidos registrados</h2>
-          <p class="section-description">Consulta fechas, estado y datos de cada orden.</p>
+          <p class="section-description">Ordena los resultados por columna y usa los filtros para encontrar pedidos.</p>
         </div>
       </div>
       <div class="orders-table-wrap">
         <table>
           <thead>
             <tr>
-              <th>ID</th><th>Cliente</th><th class="num">Ton</th>
-              <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
-              <th>Tipo</th><th>Prior.</th>
-              <th>Periodo</th><th>F. calculada</th><th>Estado</th><th>Acciones</th>
+              <th data-sort="id" tabindex="0">ID</th>
+              <th data-sort="customer_name" tabindex="0">Cliente</th>
+              <th class="num" data-sort="quantity_requested" tabindex="0">Ton</th>
+              <th data-sort="team_name" tabindex="0">Equipo</th>
+              <th data-sort="order_date" tabindex="0">F. pedido</th>
+              <th data-sort="requested_delivery_date" tabindex="0">F. solicitada</th>
+              <th data-sort="tipo_pedido" tabindex="0">Tipo</th>
+              <th data-sort="is_priority" tabindex="0">Prior.</th>
+              <th data-sort="period" tabindex="0">Periodo</th>
+              <th data-sort="calculated_delivery_date" tabindex="0">F. calculada</th>
+              <th data-sort="days_late" tabindex="0">Estado</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="ordersBody"></tbody>
         </table>
       </div>
+      <nav class="orders-pager" aria-label="Paginación de pedidos">
+        <button class="btn small orders-page-btn" id="btnPrevPage" type="button" aria-label="Página anterior">‹</button>
+        <span id="pageInfo" aria-live="polite"></span>
+        <button class="btn small orders-page-btn" id="btnNextPage" type="button" aria-label="Página siguiente">›</button>
+      </nav>
     </section>
   </div>
 
