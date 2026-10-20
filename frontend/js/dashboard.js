@@ -15,11 +15,15 @@ async function loadDashboard() {
     const month = val("dashMonth");
     setStatus("dashStatus", "Cargando…");
 
-    const [orders, teams] = await Promise.all([api("/orders"), api("/teams")]);
+    const [orders, teams, plannedMonths] = await Promise.all([api("/orders"), api("/teams"), api("/planning/months")]);
 
     // Orders in the selected planning period
     const monthOrders = orders.filter(o =>
       String(o.planning_year) === String(year) && String(o.planning_month) === String(month)
+    );
+
+    const isMonthPlanned = plannedMonths.some(p =>
+      String(p.planning_year) === String(year) && String(p.planning_month) === String(month)
     );
 
     const totalOrders = monthOrders.length;
@@ -68,17 +72,38 @@ async function loadDashboard() {
       grid.appendChild(card);
     });
 
-    // Per-team occupancy summary table
+    // Per-team occupancy summary. Distinguish an unplanned month from a
+    // planned month where a team simply has no work assigned.
     const body = qs("dashOccBody");
     body.innerHTML = "";
     occResults.forEach(o => {
-      const busiestWeek = o.weekly_breakdown.reduce((max, w) =>
-        (w.occupancy_pct ?? 0) > (max?.occupancy_pct ?? -1) ? w : max, null);
+      const weeklyBreakdown = o.weekly_breakdown ?? [];
+      const allocatedTonnage = weeklyBreakdown.reduce(
+        (sum, week) => sum + Number(week.allocated ?? 0), 0
+      );
+      const busiestWeek = weeklyBreakdown
+        .filter(week => Number(week.allocated ?? 0) > 0)
+        .reduce((max, week) =>
+          Number(week.occupancy_pct ?? 0) > Number(max?.occupancy_pct ?? -1) ? week : max,
+          null
+        );
+
+      let occupancyLabel = "Sin planear";
+      let busiestWeekLabel = "Sin planear";
+      if (isMonthPlanned) {
+        occupancyLabel = o.overall_occupancy_pct == null
+          ? "Sin datos de capacidad"
+          : `${Number(o.overall_occupancy_pct).toFixed(1)}% (${Math.round(allocatedTonnage).toLocaleString()} t asignadas)`;
+        busiestWeekLabel = busiestWeek
+          ? `Semana ${busiestWeek.week_number} (${busiestWeek.occupancy_pct ?? "—"}%)`
+          : "Sin carga asignada";
+      }
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${o.team_name}</td>
-        <td class="num">${o.overall_occupancy_pct ?? "—"}%</td>
-        <td>${busiestWeek ? `Semana ${busiestWeek.week_number} (${busiestWeek.occupancy_pct}%)` : "—"}</td>`;
+        <td class="num">${occupancyLabel}</td>
+        <td>${busiestWeekLabel}</td>`;
       body.appendChild(tr);
     });
 
