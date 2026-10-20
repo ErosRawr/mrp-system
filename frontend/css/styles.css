@@ -318,3 +318,195 @@
   .criterion-order-row .oname { color: var(--text); flex: 1; }
   .criterion-order-row .odate { font-family: var(--mono); color: var(--text-dim); white-space: nowrap; }
   .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  /* ── Planning workspace ──────────────────────────────────── */
+
+  .plan-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--panel);
+  }
+  .plan-saved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .78rem;
+    color: var(--good);
+    padding: .3rem .7rem;
+    background: rgba(95,184,122,.08);
+    border: 1px solid rgba(95,184,122,.25);
+    border-radius: 2px;
+    margin-left: .4rem;
+  }
+
+  /* ── Tabs ─────────────────────────────────────────────────── */
+  .plan-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+  .plan-tab {
+    padding: .55rem 1.1rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    font-size: .84rem;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .plan-tab:hover { color: var(--text); }
+  .plan-tab.active {
+    color: #fff;
+    border-bottom-color: var(--accent);
+  }
+  .plan-tab-panel { display: none; }
+  .plan-tab-panel.active { display: block; }
+
+  /* ── Filter bar ──────────────────────────────────────────── */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .7rem;
+    align-items: flex-end;
+    padding: .6rem .8rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: 1rem;
+  }
+  .filter-bar .field input,
+  .filter-bar .field select { min-width: 110px; }
+
+  /* ── Unsaved banner ──────────────────────────────────────── */
+  .unsaved-banner {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .55rem 1rem;
+    background: rgba(217,154,78,.1);
+    border: 1px solid rgba(217,154,78,.35);
+    border-radius: 3px;
+    color: var(--warn);
+    font-size: .82rem;
+    margin-bottom: 1rem;
+  }
+  .unsaved-banner .btn { margin-left: auto; }
+
+  /* ── Planning blocks ─────────────────────────────────────── */
+  .plan-block {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: .7rem;
+  }
+  .plan-block-header {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .6rem .9rem;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .plan-block-name { font-size: .84rem; font-weight: 600; color: #fff; }
+  .plan-block-count { font-size: .72rem; color: var(--text-faint); margin-left: auto; }
+  .plan-block-badge {
+    font-size: .68rem;
+    padding: .15rem .5rem;
+    border-radius: 2px;
+    background: rgba(217,105,90,.12);
+    color: var(--danger);
+    border: 1px solid rgba(217,105,90,.25);
+  }
+  .plan-block-orders {
+    min-height: 36px;
+    padding: .3rem;
+  }
+  .block-hold .plan-block-orders { opacity: .55; }
+  .block-hold .plan-block-orders .order-card { border-left-color: var(--danger); }
+
+  /* ── Order cards (draggable) ─────────────────────────────── */
+  .order-card {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .6rem;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: 2px;
+    margin-bottom: 2px;
+    font-size: .78rem;
+    cursor: grab;
+    transition: background .15s, opacity .15s;
+  }
+  .order-card:hover { background: var(--bg); }
+  .order-card.dragging { opacity: .4; }
+  .order-card-grip {
+    color: var(--text-faint);
+    font-size: .9rem;
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .order-card-info { flex: 1; color: var(--text); }
+  .order-card-meta { font-size: .7rem; color: var(--text-dim); margin-left: .4rem; }
+  .order-tipo { font-size: .66rem; padding: .1rem .35rem; background: var(--border); border-radius: 2px; }
+  .priority-star { color: var(--warn); }
+  .order-card-date { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); white-space: nowrap; }
+  .order-card-status { width: 20px; text-align: center; flex-shrink: 0; }
+  .order-card-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  .order-card-actions .btn {
+    padding: .15rem .35rem;
+    font-size: .7rem;
+    min-width: auto;
+    height: auto;
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-dim);
+  }
+  .order-card-actions .btn:hover { color: #fff; border-color: var(--accent); }
+
+  /* ── Impact cards ────────────────────────────────────────── */
+  .plan-impact { margin-bottom: 1rem; }
+  .plan-impact-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .7rem;
+  }
+  .plan-impact-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .7rem .9rem;
+    text-align: center;
+  }
+  .plan-impact-card .kpi-label { margin-bottom: .25rem; }
+  .plan-impact-card .kpi-value { font-size: 1.4rem; }
+
+  /* ── Save confirmation modal ─────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.4rem 1.6rem;
+    max-width: 440px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  .modal-title { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: .8rem; }
+  .modal-body { font-size: .84rem; color: var(--text); line-height: 1.6; margin-bottom: 1rem; }
+  .modal-body p { margin-bottom: .4rem; }
+  .modal-actions { display: flex; gap: .7rem; justify-content: flex-end; }
+  .modal-cancel { background: transparent !important; border-color: var(--border) !important; }
+  .modal-cancel:hover { border-color: var(--text-faint) !important; }

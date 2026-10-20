@@ -21,7 +21,6 @@
   <button class="nav-item" data-view="calendar">Calendario</button>
   <button class="nav-item" data-view="requirements">Requerimientos</button>
   <button class="nav-item" data-view="planning">Planeación Mensual</button>
-  <button class="nav-item" data-view="heuristica">Heurística</button>
   <button class="nav-item" data-view="occupancy">Ocupación</button>
 </nav>
 
@@ -237,77 +236,191 @@
     </table>
   </div>
 
-  <!-- PLANEACION -->
+  <!-- PLANEACIÓN (unified workspace) -->
   <div class="view" id="view-planning">
     <h1>Planeación mensual</h1>
-    <p class="view-desc">Toma todos los pedidos del mes, los ordena por fecha solicitada, y asigna capacidad semanal a lo largo de toda la ruta.</p>
+    <p class="view-desc">Compara estrategias, reordena pedidos manualmente, agrúpalos en bloques, previsualiza el impacto y guarda el plan.</p>
 
-    <div class="panel">
+    <!-- ── Sticky header: month picker ──────────────────────── -->
+    <div class="panel plan-header">
       <div class="form-row">
         <div class="field"><label>Año</label><input id="planYear" type="number" value="2026" /></div>
         <div class="field"><label>Mes</label><input id="planMonth" type="number" min="1" max="12" value="9" /></div>
-        <div class="field">
-          <label>Criterio</label>
-          <select id="planCriterion">
-            <option value="peps">PEPS (FIFO)</option>
-            <option value="prioritario">Prioritario</option>
-            <option value="heuristica">Heurística</option>
-          </select>
-        </div>
-        <button class="btn" id="btnRunPlanning">Ejecutar planeación</button>
+        <button class="btn" id="btnLoadPlanMonth">Cargar mes</button>
+        <span class="plan-saved-badge" id="planSavedBadge" style="display:none;">
+          ✓ Guardado: <span id="planSavedCriterion">—</span>
+        </span>
       </div>
-      <div class="status" id="planStatus"></div>
+      <div class="status" id="planHeaderStatus"></div>
     </div>
 
+    <!-- ── Unsaved preview banner ───────────────────────────── -->
+    <div class="unsaved-banner" id="planUnsavedBanner" style="display:none;">
+      ⚠ Vista previa sin guardar — <span id="unsavedStrategyLabel">—</span>
+      <button class="btn small" id="btnDismissPreview">Descartar</button>
+    </div>
+
+    <!-- ── Strategy tabs ────────────────────────────────────── -->
+    <div class="plan-tabs" id="planTabs">
+      <button class="plan-tab active" data-tab="compare">Comparar estrategias</button>
+      <button class="plan-tab" data-tab="manual">Secuencia manual</button>
+    </div>
+
+    <!-- ═══ TAB: Compare strategies ═══════════════════════════ -->
+    <div class="plan-tab-panel active" id="panelCompare">
+      <div class="form-row" style="margin-bottom:.8rem;">
+        <button class="btn" id="btnCompareStrategies">Comparar</button>
+      </div>
+      <div class="status" id="compareStatus"></div>
+
+      <!-- 3-column comparison grid -->
+      <div class="criteria-columns" id="criteriaColumns"></div>
+
+      <!-- Commit panel -->
+      <div class="panel" id="compareCommitPanel" style="display:none; margin-top:1.1rem;">
+        <div class="panel-title">Aplicar un criterio</div>
+        <div class="form-row">
+          <div class="field">
+            <label>Criterio a ejecutar</label>
+            <select id="commitCriterion">
+              <option value="peps">PEPS (FIFO)</option>
+              <option value="prioritario">Prioritario</option>
+              <option value="heuristica">Heurística</option>
+            </select>
+          </div>
+          <button class="btn" id="btnCommitCriterion">Ejecutar y guardar</button>
+        </div>
+        <div class="status" id="commitStatus"></div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: Manual sequencing + blocks ═══════════════════ -->
+    <div class="plan-tab-panel" id="panelManual">
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="field">
+          <label>Buscar</label>
+          <input id="manualSearch" placeholder="Cliente o ID…" />
+        </div>
+        <div class="field">
+          <label>Prioridad</label>
+          <select id="manualFilterPriority">
+            <option value="">Todos</option>
+            <option value="1">Solo prioritarios</option>
+            <option value="0">Solo normales</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="manualFilterTipo">
+            <option value="">Todos</option>
+            <option value="comercial">Comercial</option>
+            <option value="galvanizado">Galvanizado</option>
+            <option value="perfiles">Perfiles</option>
+            <option value="perfileros">Perfileros</option>
+            <option value="tuberia">Tubería</option>
+            <option value="ojalatero">Ojalatero</option>
+            <option value="especial">Especial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="manualFilterStatus">
+            <option value="">Todos</option>
+            <option value="on_time">A tiempo</option>
+            <option value="warning">Atrasado</option>
+            <option value="critical">Crítico</option>
+            <option value="unplanned">Sin planear</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Block containers -->
+      <div id="manualBlocks">
+        <div class="plan-block" data-block="expedite">
+          <div class="plan-block-header">
+            <span class="plan-block-name">⚡ Expedite</span>
+            <span class="plan-block-count">0 pedidos</span>
+          </div>
+          <div class="plan-block-orders" data-block-id="expedite"></div>
+        </div>
+
+        <div class="plan-block" data-block="standard">
+          <div class="plan-block-header">
+            <span class="plan-block-name">📦 Estándar</span>
+            <span class="plan-block-count">0 pedidos</span>
+          </div>
+          <div class="plan-block-orders" data-block-id="standard"></div>
+        </div>
+
+        <div class="plan-block block-hold" data-block="hold">
+          <div class="plan-block-header">
+            <span class="plan-block-name">⏸ Hold</span>
+            <span class="plan-block-badge">Excluidos del plan</span>
+            <span class="plan-block-count">0 pedidos</span>
+          </div>
+          <div class="plan-block-orders" data-block-id="hold"></div>
+        </div>
+      </div>
+
+      <!-- Preview + save actions -->
+      <div class="form-row" style="margin-top:1rem; gap:.6rem;">
+        <button class="btn" id="btnPreviewManual">Previsualizar</button>
+        <button class="btn" id="btnSaveManual" disabled>Guardar plan</button>
+      </div>
+      <div class="status" id="manualStatus"></div>
+    </div>
+
+    <!-- ═══ Results / preview area (shared) ═══════════════════ -->
     <div class="summary-box" id="planSummary" style="display:none;"></div>
 
-    <table>
+    <!-- Impact panel (preview) -->
+    <div class="plan-impact" id="planImpact" style="display:none;">
+      <div class="plan-impact-row">
+        <div class="plan-impact-card">
+          <div class="kpi-label">A tiempo</div>
+          <div class="kpi-value highlight" id="impactOnTime">—</div>
+        </div>
+        <div class="plan-impact-card">
+          <div class="kpi-label">Atrasados</div>
+          <div class="kpi-value warn-text" id="impactWarning">—</div>
+        </div>
+        <div class="plan-impact-card">
+          <div class="kpi-label">Críticos</div>
+          <div class="kpi-value danger-text" id="impactCritical">—</div>
+        </div>
+        <div class="plan-impact-card">
+          <div class="kpi-label">Cuello de botella</div>
+          <div class="kpi-value" id="impactBottleneck">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results table -->
+    <table id="planResultsTable" style="display:none;">
       <thead>
         <tr>
-          <th>Pedido</th><th>Cliente</th><th>F. solicitada</th>
-          <th>F. calculada</th><th>Estado</th>
+          <th>Pedido</th><th>Cliente</th><th class="num">Ton</th>
+          <th>Tipo</th><th>Prior.</th>
+          <th>F. solicitada</th><th>F. calculada</th><th>Estado</th>
         </tr>
       </thead>
       <tbody id="planBody"></tbody>
     </table>
-  </div>
 
-  <!-- HEURISTICA -->
-  <div class="view" id="view-heuristica">
-    <h1>Comparación de criterios</h1>
-    <p class="view-desc">
-      Compara cómo quedarían los pedidos del mes bajo tres estrategias distintas,
-      sin comprometer ninguna. PEPS ordena por fecha solicitada; Prioritario
-      adelanta los pedidos marcados como prioritarios; Heurística combina
-      prioridad, tonelaje (15,000+ ton ordena de forma continua) y tipo de
-      pedido (comercial primero, especial al final).
-    </p>
-
-    <div class="panel">
-      <div class="form-row">
-        <div class="field"><label>Año</label><input id="heurYear" type="number" value="2026" /></div>
-        <div class="field"><label>Mes</label><input id="heurMonth" type="number" min="1" max="12" value="9" /></div>
-        <button class="btn" id="btnCompareHeuristics">Comparar</button>
-      </div>
-      <div class="status" id="heurStatus"></div>
-    </div>
-
-    <div class="criteria-columns" id="criteriaColumns"></div>
-
-    <div class="panel" id="heurCommitPanel" style="display:none; margin-top:1.1rem;">
-      <div class="panel-title">Aplicar un criterio</div>
-      <div class="form-row">
-        <div class="field">
-          <label>Criterio a ejecutar</label>
-          <select id="heurCommitCriterion">
-            <option value="peps">PEPS (FIFO)</option>
-            <option value="prioritario">Prioritario</option>
-            <option value="heuristica">Heurística</option>
-          </select>
+    <!-- Save confirmation modal -->
+    <div class="modal-overlay" id="saveModal" style="display:none;">
+      <div class="modal">
+        <div class="modal-title">Confirmar plan</div>
+        <div class="modal-body" id="saveModalBody">
+          <p>¿Guardar este plan?</p>
         </div>
-        <button class="btn" id="btnCommitHeuristic">Ejecutar y guardar</button>
+        <div class="modal-actions">
+          <button class="btn" id="btnConfirmSave">Confirmar</button>
+          <button class="btn modal-cancel" id="btnCancelSave">Cancelar</button>
+        </div>
       </div>
-      <div class="status" id="heurCommitStatus"></div>
     </div>
   </div>
 
@@ -337,7 +450,6 @@
 <script src="js/calendar.js"></script>
 <script src="js/requirements.js"></script>
 <script src="js/planning.js"></script>
-<script src="js/heuristica.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/occupancy.js"></script>
 <script src="js/main.js"></script>

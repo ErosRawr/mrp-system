@@ -23,6 +23,7 @@ async function refresh(view) {
     }
     if (view === "calendar") await populateTeamDropdown("calTeam");
     if (view === "requirements") await populateOrderDropdown("reqOrder");
+    if (view === "planning") await loadPlanMonth();
   } catch (e) { console.error(e); }
 }
 
