@@ -581,7 +581,7 @@
 #view-dashboard .dashboard-period .field input,
 #view-dashboard .panel .field input,
 #view-dashboard .panel .field select {
-  background: #fff;
+  background: #0f1215;
   border-color: #3b434a;
   border-radius: 5px;
   color: var(--dash-text);
