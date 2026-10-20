@@ -1163,7 +1163,7 @@
   align-items: end;
   display: grid;
   gap: .8rem;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 #view-orders .orders-filter-grid .field { min-width: 0; }
