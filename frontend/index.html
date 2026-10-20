@@ -186,18 +186,44 @@
 
   <!-- PEDIDOS -->
   <div class="view" id="view-orders">
-    <h1>Pedidos</h1>
-    <p class="view-desc">Cada pedido entra en un equipo de la ruta y lleva una fecha solicitada de entrega.</p>
+    <header class="orders-header">
+      <div>
+        <p class="orders-eyebrow">GESTIÓN DE PRODUCCIÓN</p>
+        <h1>Pedidos</h1>
+        <p class="view-desc">Registra y consulta los pedidos que alimentan la ruta de producción.</p>
+      </div>
+    </header>
 
-    <div class="panel">
-      <div class="panel-title" id="orderFormTitle">Nuevo pedido</div>
-      <div class="form-row">
-        <div class="field"><label>Cliente</label><input id="orderCust" /></div>
-        <div class="field"><label>Tonelaje</label><input id="orderQty" type="number" step="0.01" /></div>
-        <div class="field"><label>Equipo de entrada</label><select id="orderTeam"></select></div>
-        <div class="field"><label>Fecha de pedido</label><input id="orderDate" type="date" /></div>
-        <div class="field"><label>Fecha solicitada</label><input id="orderReqDate" type="date" /></div>
-        <div class="field"><label>Tipo de pedido</label>
+    <section class="panel orders-form-panel" aria-labelledby="orderFormTitle">
+      <div class="orders-section-heading">
+        <div>
+          <h2 class="panel-title" id="orderFormTitle">Nuevo pedido</h2>
+          <p class="section-description">Define el cliente, volumen, prioridad y fechas requeridas.</p>
+        </div>
+      </div>
+      <div class="orders-form-grid">
+        <div class="field">
+          <label for="orderCust">Cliente</label>
+          <input id="orderCust" autocomplete="organization" />
+        </div>
+        <div class="field">
+          <label for="orderQty">Tonelaje (t)</label>
+          <input id="orderQty" type="number" min="0.01" step="0.01" />
+        </div>
+        <div class="field">
+          <label for="orderTeam">Equipo de entrada</label>
+          <select id="orderTeam"></select>
+        </div>
+        <div class="field">
+          <label for="orderDate">Fecha de pedido</label>
+          <input id="orderDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="orderReqDate">Fecha solicitada</label>
+          <input id="orderReqDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="orderTipo">Tipo de pedido</label>
           <select id="orderTipo">
             <option value="">—</option>
             <option value="comercial">Comercial</option>
@@ -209,29 +235,39 @@
             <option value="especial">Especial</option>
           </select>
         </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <label style="flex-direction:row; align-items:center; gap:.4rem; font-size:.84rem; color:var(--text);">
-            <input id="orderPriority" type="checkbox" style="min-width:auto; width:auto;" /> Prioritario
-          </label>
-        </div>
-        <button class="btn" id="btnCreateOrder">Crear</button>
-        <button class="btn" id="btnCancelEditOrder" style="display:none; background:transparent; border-color:var(--border);">Cancelar</button>
+        <label class="orders-priority" for="orderPriority">
+          <input id="orderPriority" type="checkbox" />
+          <span>Marcar como prioritario</span>
+        </label>
       </div>
-      <div class="status" id="orderStatus"></div>
-    </div>
+      <div class="orders-form-actions">
+        <button class="btn" id="btnCreateOrder">Crear pedido</button>
+        <button class="btn orders-cancel-btn" id="btnCancelEditOrder" style="display:none;">Cancelar</button>
+        <div class="status" id="orderStatus" role="status" aria-live="polite"></div>
+      </div>
+    </section>
 
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Cliente</th><th class="num">Ton</th>
-          <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
-          <th>Tipo</th><th>Prior.</th>
-          <th>Periodo</th><th>F. calculada</th><th>Estado</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="ordersBody"></tbody>
-    </table>
+    <section class="orders-list-section" aria-labelledby="ordersListTitle">
+      <div class="orders-section-heading">
+        <div>
+          <h2 id="ordersListTitle">Pedidos registrados</h2>
+          <p class="section-description">Consulta fechas, estado y datos de cada orden.</p>
+        </div>
+      </div>
+      <div class="orders-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Cliente</th><th class="num">Ton</th>
+              <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
+              <th>Tipo</th><th>Prior.</th>
+              <th>Periodo</th><th>F. calculada</th><th>Estado</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <!-- DISPONIBILIDAD -->
