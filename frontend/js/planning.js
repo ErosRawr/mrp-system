@@ -1,5 +1,13 @@
 /* ── Planeación ───────────────────────────────────────────── */
 
+/* "2026-10 (peps), 2026-11 (peps)" -- the later months the backend re-planned
+   because planning runs in calendar order. Shared with heuristica.js. */
+function describeReplanned(months) {
+  if (!months || months.length === 0) return "";
+  const list = months.map(m => `${m.planning_year}-${String(m.planning_month).padStart(2, "0")} (${m.criterion}${m.orders_failed ? `, ${m.orders_failed} con error` : ""})`).join(", ");
+  return ` También se replanearon los meses posteriores: ${list}.`;
+}
+
 qs("btnRunPlanning").addEventListener("click", async () => {
   const done = setLoading("btnRunPlanning", "Ejecutando");
   try {
@@ -7,7 +15,10 @@ qs("btnRunPlanning").addEventListener("click", async () => {
     setStatus("planStatus", "Ejecutando…");
     const data = await api(`/planning/run?year=${year}&month=${month}&criterion=${criterion}`, { method: "POST" });
 
-    setStatus("planStatus", `Listo. ${data.orders_planned} pedido(s) planeado(s) con criterio "${data.criterion}".`);
+    const failed = data.orders_failed || 0;
+    setStatus("planStatus", `Listo. ${data.orders_planned} pedido(s) planeado(s) con criterio "${data.criterion}".`
+      + (failed ? ` ${failed} pedido(s) NO se pudieron planear (ver los renglones en rojo).` : "")
+      + describeReplanned(data.replanned_months), failed > 0);
     const summary = qs("planSummary");
     summary.style.display = "block";
     summary.innerHTML = `Planeación ${data.planning_year}-${String(data.planning_month).padStart(2,"0")} (${data.criterion}) — <span class="big-num">${data.orders_planned}</span> pedidos`;

@@ -54,7 +54,7 @@ qs("btnImportHolidays").addEventListener("click", async () => {
 
 /* ── Interrupciones aleatorias ────────────────────────────── */
 
-qs("btnGenerateDisruptions").addEventListener("click", async () => {
+qs("btnGenerateDisruptions")?.addEventListener("click", async () => {
   const done = setLoading("btnGenerateDisruptions", "Generando");
   try {
     const params = new URLSearchParams({
@@ -73,15 +73,17 @@ qs("btnGenerateDisruptions").addEventListener("click", async () => {
   finally { done(); }
 });
 
-qs("btnReplanAll").addEventListener("click", async () => {
+qs("btnReplanAll")?.addEventListener("click", async () => {
   const done = setLoading("btnReplanAll", "Replanificando");
   try {
     setStatus("distStatus", "Replanificando…");
     const data = await api("/planning/replan-all", { method: "POST" });
     const n = data.months_replanned.length;
+    const failed = data.months_replanned.reduce((sum, m) => sum + (m.orders_failed || 0), 0);
     setStatus("distStatus", n
       ? `Listo. ${n} mes(es) replanificado(s) en orden, cada uno con su criterio.`
-      : "No hay meses planeados todavía.");
+        + (failed ? ` ${failed} pedido(s) NO se pudieron planear: revisa Planeación Mensual.` : "")
+      : "No hay meses planeados todavía.", failed > 0);
   } catch (e) { setStatus("distStatus", e.message, true); }
   finally { done(); }
 });

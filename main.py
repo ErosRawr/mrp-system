@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 import models
@@ -13,6 +13,10 @@ from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP,
 from lateness import classify_lateness
 from mexican_holidays import get_holiday_week_impact
 from planning import run_monthly_planning, compare_planning_criteria, replan_all
+from validation import (
+    MAX_TEAM_MONTHLY_TONS, clean_text, require_finite, require_month,
+    require_order_tons, require_week, require_year,
+)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -47,18 +51,30 @@ def create_team(
     holiday_staffing: float = 0.0,
     db: Session = Depends(get_db),
 ):
+    name = clean_text(name, "name", 100)
+    require_finite(monthly_capacity, "monthly_capacity")
+    require_finite(efficiency, "efficiency")
+    require_finite(holiday_staffing, "holiday_staffing")
+
+    if sequence_order < 1:
+        raise HTTPException(400, "sequence_order must be 1 or greater (1 = first team on the route)")
     if not (0 <= holiday_staffing <= 1):
         raise HTTPException(400, "holiday_staffing must be between 0 (team stops on holidays) and 1 (runs normally)")
     if monthly_capacity <= 0:
         raise HTTPException(400, "monthly_capacity must be greater than 0 -- a team with no capacity can never produce anything")
-    if weeks_available <= 0:
-        raise HTTPException(400, "weeks_available must be greater than 0")
+    if monthly_capacity > MAX_TEAM_MONTHLY_TONS:
+        raise HTTPException(400, f"monthly_capacity is above {MAX_TEAM_MONTHLY_TONS:,} t -- check for an extra zero")
+    if not (1 <= weeks_available <= 5):
+        raise HTTPException(400, "weeks_available must be between 1 and 5 (weeks of a month the team can work)")
     if not (0 < efficiency <= 1):
         raise HTTPException(400, "efficiency must be between 0 (exclusive) and 1 (inclusive), e.g. 0.95 for 95%")
 
     existing = db.query(models.Team).filter(models.Team.sequence_order == sequence_order).first()
     if existing:
         raise HTTPException(400, f"sequence_order {sequence_order} is already used by team '{existing.name}'")
+    same_name = db.query(models.Team).filter(func.lower(models.Team.name) == name.lower()).first()
+    if same_name:
+        raise HTTPException(400, f"a team named '{same_name.name}' already exists")
 
     team = models.Team(
         name=name,
@@ -107,13 +123,17 @@ def create_order(
     tipo_pedido: str = None,
     db: Session = Depends(get_db),
 ):
-    if quantity_requested <= 0:
-        raise HTTPException(400, "quantity_requested must be greater than 0")
+    customer_name = clean_text(customer_name, "customer_name", 100)
+    tipo_pedido = clean_text(tipo_pedido, "tipo_pedido", 50, required=False)
+    require_order_tons(quantity_requested)
 
     entry_team = db.query(models.Team).filter(models.Team.id == entry_team_id).first()
     if not entry_team:
         raise HTTPException(400, f"No team exists with id {entry_team_id} -- check GET /teams for valid ids")
 
+    require_year(order_date.year, "order_date year")
+    if requested_delivery_date:
+        require_year(requested_delivery_date.year, "requested_delivery_date year")
     if requested_delivery_date and requested_delivery_date < order_date:
         raise HTTPException(400, "requested_delivery_date cannot be before order_date")
 
@@ -124,6 +144,8 @@ def create_order(
         planning_year = order_date.year
     if planning_month is None:
         planning_month = order_date.month
+    require_year(planning_year, "planning_year")
+    require_month(planning_month, "planning_month")
 
     order = models.Order(
         customer_name=customer_name,
@@ -194,8 +216,7 @@ def update_order(
         raise HTTPException(404, "Order not found")
 
     if quantity_requested is not None:
-        if quantity_requested <= 0:
-            raise HTTPException(400, "quantity_requested must be greater than 0")
+        require_order_tons(quantity_requested)
         order.quantity_requested = quantity_requested
 
     if entry_team_id is not None:
@@ -205,19 +226,21 @@ def update_order(
         order.entry_team_id = entry_team_id
 
     if customer_name is not None:
-        order.customer_name = customer_name
+        order.customer_name = clean_text(customer_name, "customer_name", 100)
     if order_date is not None:
+        require_year(order_date.year, "order_date year")
         order.order_date = order_date
     if requested_delivery_date is not None:
+        require_year(requested_delivery_date.year, "requested_delivery_date year")
         order.requested_delivery_date = requested_delivery_date
     if planning_year is not None:
-        order.planning_year = planning_year
+        order.planning_year = require_year(planning_year, "planning_year")
     if planning_month is not None:
-        order.planning_month = planning_month
+        order.planning_month = require_month(planning_month, "planning_month")
     if is_priority is not None:
         order.is_priority = is_priority
     if tipo_pedido is not None:
-        order.tipo_pedido = tipo_pedido
+        order.tipo_pedido = clean_text(tipo_pedido, "tipo_pedido", 50, required=False)
 
     final_order_date = order_date if order_date is not None else order.order_date
     final_due_date = requested_delivery_date if requested_delivery_date is not None else order.requested_delivery_date
@@ -266,10 +289,12 @@ def set_week_exception(
     team = db.query(models.Team).filter(models.Team.id == team_id).first()
     if not team:
         raise HTTPException(400, f"No team exists with id {team_id} -- check GET /teams for valid ids")
-    if not (1 <= week_number <= 53):
-        raise HTTPException(400, "week_number must be between 1 and 53 (ISO week numbering)")
+    require_year(year)
+    require_week(year, week_number)
+    require_finite(capacity_multiplier, "capacity_multiplier")
     if not (0 <= capacity_multiplier <= 1):
         raise HTTPException(400, "capacity_multiplier must be between 0 and 1")
+    reason = clean_text(reason, "reason", 200, required=False)
 
     existing = db.query(models.TeamWeekException).filter(
         models.TeamWeekException.team_id == team_id,
@@ -371,8 +396,8 @@ def import_mexican_holidays(
         raise HTTPException(404, "Team not found")
     if not (1970 <= year <= 2200):
         raise HTTPException(400, "year must be a realistic calendar year (1970-2200)")
-    if working_days_per_week <= 0:
-        raise HTTPException(400, "working_days_per_week must be greater than 0")
+    if not (1 <= working_days_per_week <= 7):
+        raise HTTPException(400, "working_days_per_week must be between 1 and 7")
 
     staffing = float(team.holiday_staffing)
     reduction_per_holiday = (1.0 / working_days_per_week) * (1.0 - staffing)
@@ -422,6 +447,8 @@ def generate_disruptions(
     new weeks it picks. Plans already committed do not know about new
     exceptions -- call POST /planning/replan-all afterwards.
     """
+    for field, value in (("probability", probability), ("min_drop", min_drop), ("max_drop", max_drop)):
+        require_finite(value, field)
     if not (0 <= probability <= 1):
         raise HTTPException(400, "probability must be between 0 and 1, e.g. 0.10 for 10%")
     if not (0 < min_drop <= max_drop <= 1):
@@ -472,7 +499,7 @@ def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
     """
     result = calculate_material_requirements(order_id, db)
     if result is None:
-        return {"error": "Order or entry team not found"}
+        raise HTTPException(404, "Order or entry team not found")
     return result
 
 
@@ -494,10 +521,15 @@ def trigger_monthly_planning(
     underlying CapacityAllocation rows. Idempotent -- re-running for the
     same month clears prior allocations for that month's orders first.
     """
-    if not (1 <= month <= 12):
-        raise HTTPException(400, "month must be between 1 and 12")
+    require_year(year)
+    require_month(month)
     if criterion not in ("peps", "prioritario", "heuristica"):
         raise HTTPException(400, "criterion must be one of: peps, prioritario, heuristica")
+    has_orders = db.query(models.Order).filter(
+        models.Order.planning_year == year, models.Order.planning_month == month
+    ).first()
+    if not has_orders:
+        raise HTTPException(400, f"There are no orders for {year}-{month:02d}, so there is nothing to plan")
 
     result = run_monthly_planning(year, month, db, criterion=criterion)
     return result
@@ -511,8 +543,8 @@ def compare_planning(year: int, month: int, db: Session = Depends(get_db)):
     how each strategy would schedule the month's orders before choosing
     one to actually run for real via POST /planning/run.
     """
-    if not (1 <= month <= 12):
-        raise HTTPException(400, "month must be between 1 and 12")
+    require_year(year)
+    require_month(month)
 
     result = compare_planning_criteria(year, month, db)
     return result
@@ -559,6 +591,8 @@ def get_team_occupancy(team_id: int, year: int, month: int, db: Session = Depend
     Returns this team's percentage occupancy for the given month, plus a
     week-by-week breakdown -- the chart data required by the spec.
     """
+    require_year(year)
+    require_month(month)
     team = db.query(models.Team).filter(models.Team.id == team_id).first()
     if not team:
         raise HTTPException(404, "Team not found")

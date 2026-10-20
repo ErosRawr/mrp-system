@@ -18,7 +18,9 @@ qs("btnCompareHeuristics").addEventListener("click", async () => {
     setStatus("heurStatus", "Comparando…");
     const data = await api(`/planning/compare?year=${year}&month=${month}`);
 
-    setStatus("heurStatus", "Listo. Nada fue guardado — esto es solo una comparación.");
+    const later = data.later_planned_months || [];
+    setStatus("heurStatus", "Listo. Nada fue guardado — esto es solo una comparación."
+      + (later.length ? " Al guardar un criterio se replanearán los meses posteriores ya planeados (" + later.map(m => `${m.planning_year}-${String(m.planning_month).padStart(2, "0")}`).join(", ") + ")." : ""));
 
     const container = qs("criteriaColumns");
     container.innerHTML = "";
@@ -69,7 +71,10 @@ qs("btnCommitHeuristic").addEventListener("click", async () => {
     const year = val("heurYear"), month = val("heurMonth"), criterion = val("heurCommitCriterion");
     setStatus("heurCommitStatus", "Ejecutando y guardando…");
     const data = await api(`/planning/run?year=${year}&month=${month}&criterion=${criterion}`, { method: "POST" });
-    setStatus("heurCommitStatus", `Guardado. ${data.orders_planned} pedido(s) planeado(s) con criterio "${data.criterion}". Revisa la pestaña Planeación Mensual para ver el detalle.`);
+    const failed = data.orders_failed || 0;
+    setStatus("heurCommitStatus", `Guardado. ${data.orders_planned} pedido(s) planeado(s) con criterio "${data.criterion}". Revisa la pestaña Planeación Mensual para ver el detalle.`
+      + (failed ? ` ${failed} pedido(s) NO se pudieron planear.` : "")
+      + describeReplanned(data.replanned_months), failed > 0);
 
     document.querySelectorAll(".criterion-col").forEach(c => c.classList.remove("selected"));
     const idx = ["peps", "prioritario", "heuristica"].indexOf(criterion);

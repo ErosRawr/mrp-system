@@ -7,13 +7,6 @@ qs("btnCalcReq").addEventListener("click", async () => {
     setStatus("reqStatus", "Calculando…");
     const data = await api(`/orders/${orderId}/requirements`);
 
-    if (data.error) {
-      setStatus("reqStatus", data.error, true);
-      qs("reqSummary").style.display = "none";
-      qs("reqBody").innerHTML = "";
-      return;
-    }
-
     setStatus("reqStatus", "Listo.");
     const summary = qs("reqSummary");
     summary.style.display = "block";
@@ -32,6 +25,9 @@ qs("btnCalcReq").addEventListener("click", async () => {
         <td class="num">${s.efficiency}</td><td class="num">${s.monthly_capacity}</td><td class="num">${s.weekly_capacity}</td>`;
       body.appendChild(tr);
     });
-  } catch (e) { setStatus("reqStatus", e.message, true); }
+  } catch (e) {
+    setStatus("reqStatus", e.message, true);
+    qs("reqSummary").style.display = "none";
+    qs("reqBody").innerHTML = "";
+  }
 });
-

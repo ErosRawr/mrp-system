@@ -20,6 +20,11 @@ from calculations import calculate_material_requirements
 from heuristics import sort_orders_by_criterion
 from lateness import classify_lateness
 
+# How far ahead one team may be scheduled for one order. If an order cannot be
+# finished inside this horizon it is reported as an error instead of being
+# planned decades out.
+MAX_PLANNING_WEEKS = 260  # about five years
+
 
 def _iso_year_week(d: date):
     """Returns (iso_year, iso_week_number) for a date."""
@@ -97,7 +102,7 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     year, week = start_year, start_week
     breakdown = []
     weeks_elapsed = 0
-    max_iterations = 260  # ~5 years of weeks, safety cap
+    max_iterations = MAX_PLANNING_WEEKS
 
     while remaining_needed > 0 and weeks_elapsed < max_iterations:
         multiplier = _capacity_multiplier(team_id, year, week, db)
@@ -145,6 +150,15 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
     }
 
 
+def _discard_order_allocations(order_id: int, db: Session):
+    """Removes every capacity claim an order made. Used when scheduling an order
+    fails part-way, so a failed order never keeps capacity other orders need."""
+    db.query(models.CapacityAllocation).filter(
+        models.CapacityAllocation.order_id == order_id
+    ).delete(synchronize_session=False)
+    db.flush()
+
+
 def _plan_orders_in_sequence(orders, db: Session):
     """
     Core scheduling loop: given orders ALREADY SORTED in the desired
@@ -175,7 +189,7 @@ def _plan_orders_in_sequence(orders, db: Session):
         next_year, next_week = start_year, start_week
 
         team_schedule_results = []
-        scheduling_failed = False
+        failure = None
 
         for step in steps_in_production_order:
             result = _schedule_team_weekly(
@@ -187,10 +201,10 @@ def _plan_orders_in_sequence(orders, db: Session):
                 db=db,
             )
             if result is None or result.get("error"):
-                scheduling_failed = True
+                failure = (result or {}).get("error") or f"Team '{step['team_name']}' not found"
                 team_schedule_results.append({
                     "team_name": step["team_name"],
-                    **(result or {"error": "Team not found"}),
+                    **(result or {"error": failure}),
                 })
                 break
 
@@ -199,17 +213,29 @@ def _plan_orders_in_sequence(orders, db: Session):
                 **result,
             })
 
+            if not result["fully_scheduled"]:
+                failure = (
+                    f"Team '{step['team_name']}' cannot fit {step['output_needed']:,.0f} t "
+                    f"within {MAX_PLANNING_WEEKS} weeks of planning"
+                )
+                break
+
             next_week = result["end_week"] + 1
             next_year = result["end_year"]
             if next_week > 52:
                 next_week = 1
                 next_year += 1
 
-        if scheduling_failed:
+        if failure:
+            # Never keep a half-scheduled order: free what it claimed, and clear
+            # any delivery date left over from an earlier, successful run.
+            _discard_order_allocations(order.id, db)
+            order.calculated_delivery_date = None
+            db.add(order)
             results.append({
                 "order_id": order.id,
                 "customer_name": order.customer_name,
-                "error": "Scheduling failed -- see team_schedule for details",
+                "error": failure,
                 "team_schedule": team_schedule_results,
             })
             continue
@@ -296,11 +322,13 @@ def _replan_months(month_plans, db: Session):
     summaries = []
     for mp in month_plans:
         results = _plan_month(mp.planning_year, mp.planning_month, mp.criterion, db)
+        failed = sum(1 for r in results if "error" in r)
         summaries.append({
             "planning_year": mp.planning_year,
             "planning_month": mp.planning_month,
             "criterion": mp.criterion,
-            "orders_planned": len(results),
+            "orders_planned": len(results) - failed,
+            "orders_failed": failed,
             "results": results,
         })
     return summaries
@@ -345,9 +373,10 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session, c
         "planning_month": planning_month,
         "criterion": criterion,
         "orders_planned": this_month["orders_planned"],
+        "orders_failed": this_month["orders_failed"],
         "results": this_month["results"],
         "replanned_months": [
-            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned")}
+            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned", "orders_failed")}
             for s in summaries[1:]
         ],
     }
@@ -368,7 +397,7 @@ def replan_all(db: Session):
     db.commit()
     return {
         "months_replanned": [
-            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned")}
+            {k: s[k] for k in ("planning_year", "planning_month", "criterion", "orders_planned", "orders_failed")}
             for s in summaries
         ]
     }
