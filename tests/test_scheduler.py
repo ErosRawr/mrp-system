@@ -118,6 +118,7 @@ def test_summary_counts_failures_in_compare(client):
 
 def test_priority_criterion_moves_priority_order_ahead_of_earlier_due_date(client):
     create_plant(client)
+    client.post("/team-week-exceptions", params=dict(team_id=4, year=2026, week_number=39, capacity_multiplier=0.06))
     early = create_order(client, qty=1000, lead_days=1, name="Entrega temprana")
     priority = create_order(client, qty=1000, lead_days=40, name="Prioritario", priority=True)
 
