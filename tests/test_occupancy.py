@@ -1,30 +1,18 @@
-import models
-from main import get_team_occupancy
+"""Regression coverage for reduced weekly capacity in monthly occupancy."""
+from tests.helpers import create_order, create_plant, plan
 
 
-def test_occupancy_uses_reduced_capacity_in_overall_average(db, make_team, make_order):
-    team = make_team(weekly=1000)
-    order = make_order(team, qty=500)
-    db.add(models.TeamWeekException(
-        team_id=team.id,
-        year=2026,
-        week_number=36,
-        capacity_multiplier=0.5,
+def test_reduced_week_capacity_is_used_in_monthly_occupancy(client):
+    create_plant(client)
+    client.post("/team-week-exceptions", params=dict(
+        team_id=4, year=2026, week_number=39, capacity_multiplier=0.5,
         reason="Festivo",
     ))
-    db.add(models.CapacityAllocation(
-        team_id=team.id,
-        order_id=order.id,
-        year=2026,
-        week_number=36,
-        quantity_allocated=500,
-    ))
-    db.commit()
+    create_order(client, qty=12500, name="Carga completa")
+    plan(client, 9)
 
-    result = get_team_occupancy(team.id, 2026, 9, db)
-
-    week_36 = next(week for week in result["weekly_breakdown"] if week["week_number"] == 36)
-    assert week_36["capacity"] == 500
-    assert week_36["occupancy_pct"] == 100.0
-    # September 2026 touches five ISO weeks: 4 * 1,000 + 500 effective tons.
+    result = client.get("/teams/4/occupancy", params=dict(year=2026, month=9)).json()
+    week_39 = next(week for week in result["weekly_breakdown"] if week["week_number"] == 39)
+    assert week_39["capacity"] == 12500
+    assert week_39["occupancy_pct"] == 100.0
     assert result["overall_occupancy_pct"] == 11.1
