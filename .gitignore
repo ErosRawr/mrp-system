@@ -1,6 +1,11 @@
 venv/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.coverage
+htmlcov/
 mrp.db
+*.db-wal
+*.db-shm
 server.log

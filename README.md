@@ -25,7 +25,7 @@ MRP System is a manufacturing planning application built around a multi-team pro
 4. Compare scheduling criteria for a month.
 5. Run the selected plan and review delivery dates, lateness, and team occupancy.
 
-The current planner compares predefined scheduling criteria. **Rearranging planning blocks and filtering orders are planned improvements** and are not available in the current interface.
+Planning criteria can be compared before a monthly plan is committed. For demo workflows, the planner supports reviewing and running the selected criterion.
 
 ## Tech stack
 
@@ -83,7 +83,7 @@ Then open [http://localhost:5500](http://localhost:5500). The frontend currently
 With the API running and a fresh local database, open a third terminal in the repository root and run:
 
 ```bash
-python seed_data.py
+python scripts/seed_data.py
 ```
 
 The script creates a sample production route and orders for 2026, imports Mexican holiday impacts, generates seeded capacity disruptions, and plans the other months. It leaves September unplanned so you can compare the scheduling criteria and run the selected plan as a demo. Run it once against a fresh database to avoid duplicate sample records.
@@ -106,11 +106,11 @@ The script creates a sample production route and orders for 2026, imports Mexica
 ├── mexican_holidays.py      # Mexican holiday calendar calculations
 ├── models.py                # SQLAlchemy data models
 ├── planning.py              # Monthly planning and replanning
-├── seed_data.py             # Optional demo data loader
-├── verify_capacity.py       # Capacity verification script
-├── verify_lateness.py       # Lateness verification script
-├── verify_replan_stable.py  # Replanning stability check
-└── requirements.txt         # Backend dependencies
+├── scripts/                 # Demo data loader and API verification scripts
+├── tests/                   # Isolated API and scheduling test suite
+├── pytest.ini               # Test discovery and configuration
+├── requirements.txt         # Runtime dependencies
+└── requirements-dev.txt     # Test and development dependencies
 ```
 
 ## Verification scripts
@@ -118,14 +118,25 @@ The script creates a sample production route and orders for 2026, imports Mexica
 The repository includes scripts for checking capacity allocations, lateness reporting, and replanning stability. They call the local API, so start the backend first. The scripts also require the `requests` package:
 
 ```bash
-python verify_capacity.py
-python verify_lateness.py
-python verify_replan_stable.py
+python scripts/verify_capacity.py
+python scripts/verify_lateness.py
+python scripts/verify_replan_stable.py
 ```
+
+## Run the test suite
+
+Install the development dependencies and run the tests from the repository root:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+The test setup points the application at a temporary SQLite database and resets it for each API test.
 
 ## Project status
 
-This is an active portfolio project. The current application demonstrates capacity-aware monthly planning and schedule comparison. A block-oriented planning experience—with order filtering and rearrangeable planning blocks—is planned next.
+This is an active portfolio project. The current application demonstrates capacity-aware monthly planning and schedule comparison. The project is an active portfolio application demonstrating capacity-aware planning, order management, and production availability.
 
 ## License
 

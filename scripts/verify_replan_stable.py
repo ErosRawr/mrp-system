@@ -21,7 +21,7 @@ if response.status_code == 404:
     raise SystemExit(
         "The server has no /planning/replan-all endpoint: it is still running the old backend.\n"
         "Copy the updated main.py, models.py, planning.py and disruptions.py into the project root,\n"
-        "delete mrp.db, restart uvicorn, and run scripts/seed_data.py again."
+        "run scripts/seed_data.py against a disposable demo database."
     )
 response.raise_for_status()
 months = response.json()["months_replanned"]

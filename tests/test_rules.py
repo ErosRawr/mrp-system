@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
-from helpers import create_order, create_plant
+from tests.helpers import create_order, create_plant
 
 from heuristics import sort_orders_heuristica, sort_orders_peps, sort_orders_prioritario
 from lateness import classify_lateness
