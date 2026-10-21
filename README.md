@@ -25,7 +25,7 @@ MRP System is a manufacturing planning application built around a multi-team pro
 4. Compare scheduling criteria for a month.
 5. Run the selected plan and review delivery dates, lateness, and team occupancy.
 
-The current planner compares predefined scheduling criteria. **Rearranging planning blocks and filtering orders are planned improvements** and are not available in the current interface.
+Planning criteria can be compared before a monthly plan is committed. For demo workflows, the planner supports reviewing and running the selected criterion.
 
 ## Tech stack
 
@@ -83,7 +83,7 @@ Then open [http://localhost:5500](http://localhost:5500). The frontend currently
 With the API running and a fresh local database, open a third terminal in the repository root and run:
 
 ```bash
-python seed_data.py
+python scripts/seed_data.py
 ```
 
 The script creates a sample production route and orders for 2026, imports Mexican holiday impacts, generates seeded capacity disruptions, and plans the other months. It leaves September unplanned so you can compare the scheduling criteria and run the selected plan as a demo. Run it once against a fresh database to avoid duplicate sample records.
@@ -122,6 +122,17 @@ python verify_capacity.py
 python verify_lateness.py
 python verify_replan_stable.py
 ```
+
+## Run the test suite
+
+Install the development dependencies and run the tests from the repository root:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+The test setup points the application at a temporary SQLite database and resets it for each API test.
 
 ## Project status
 
