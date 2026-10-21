@@ -106,11 +106,11 @@ The script creates a sample production route and orders for 2026, imports Mexica
 ├── mexican_holidays.py      # Mexican holiday calendar calculations
 ├── models.py                # SQLAlchemy data models
 ├── planning.py              # Monthly planning and replanning
-├── seed_data.py             # Optional demo data loader
-├── verify_capacity.py       # Capacity verification script
-├── verify_lateness.py       # Lateness verification script
-├── verify_replan_stable.py  # Replanning stability check
-└── requirements.txt         # Backend dependencies
+├── scripts/                 # Demo data loader and API verification scripts
+├── tests/                   # Isolated API and scheduling test suite
+├── pytest.ini               # Test discovery and configuration
+├── requirements.txt         # Runtime dependencies
+└── requirements-dev.txt     # Test and development dependencies
 ```
 
 ## Verification scripts
@@ -118,9 +118,9 @@ The script creates a sample production route and orders for 2026, imports Mexica
 The repository includes scripts for checking capacity allocations, lateness reporting, and replanning stability. They call the local API, so start the backend first. The scripts also require the `requests` package:
 
 ```bash
-python verify_capacity.py
-python verify_lateness.py
-python verify_replan_stable.py
+python scripts/verify_capacity.py
+python scripts/verify_lateness.py
+python scripts/verify_replan_stable.py
 ```
 
 ## Run the test suite
@@ -136,7 +136,7 @@ The test setup points the application at a temporary SQLite database and resets 
 
 ## Project status
 
-This is an active portfolio project. The current application demonstrates capacity-aware monthly planning and schedule comparison. A block-oriented planning experience—with order filtering and rearrangeable planning blocks—is planned next.
+This is an active portfolio project. The current application demonstrates capacity-aware monthly planning and schedule comparison. The project is an active portfolio application demonstrating capacity-aware planning, order management, and production availability.
 
 ## License
 
