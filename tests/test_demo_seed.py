@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from helpers import allocations_by_team_week, calc_dates, ledger_violations
+from tests.helpers import allocations_by_team_week, calc_dates, ledger_violations
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = "http://localhost:8000"

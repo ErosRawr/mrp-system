@@ -3,7 +3,7 @@ import random
 from datetime import date
 
 import pytest
-from helpers import (allocations_by_team_week, calc_dates, create_order, create_plant, ledger_violations,
+from tests.helpers import (allocations_by_team_week, calc_dates, create_order, create_plant, ledger_violations,
                      plan, reset_database)
 
 CRITERION = {8: "peps", 9: "prioritario", 10: "heuristica"}

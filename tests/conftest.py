@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from database import engine
-from helpers import reset_database
+from tests.helpers import reset_database
 from main import app
 
 assert "mrp-tests-" in str(engine.url), "tests must never run against the real database"

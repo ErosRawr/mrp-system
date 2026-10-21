@@ -27,98 +27,203 @@
 <main class="main">
   <!-- DASHBOARD -->
   <div class="view active" id="view-dashboard">
-    <h1>Dashboard</h1>
-    <p class="view-desc">Estado general de la planta para el mes seleccionado.</p>
-
-    <div class="panel">
-      <div class="form-row">
-        <div class="field"><label>Año</label><input id="dashYear" type="number" value="2026" /></div>
-        <div class="field"><label>Mes</label><input id="dashMonth" type="number" min="1" max="12" value="9" /></div>
-        <button class="btn" id="btnLoadDashboard">Actualizar</button>
+    <header class="dashboard-header">
+      <div>
+        <p class="dashboard-eyebrow">OPERACIONES</p>
+        <h1>Resumen de producción</h1>
+        <p class="view-desc">Pedidos, entregas y capacidad de la planta para el periodo seleccionado.</p>
       </div>
-      <div class="status" id="dashStatus"></div>
-    </div>
-
-    <div class="kpi-grid" id="kpiGrid"></div>
-
-    <div class="dash-section-title">Ocupación por equipo (resumen)</div>
-    <table>
-      <thead><tr><th>Equipo</th><th class="num">Ocupación promedio</th><th>Semana más ocupada</th></tr></thead>
-      <tbody id="dashOccBody"></tbody>
-    </table>
-
-    <div class="dash-section-title">Vista trimestral</div>
-    <div class="panel">
-      <div class="form-row">
-        <div class="field"><label>Año</label><input id="qYear" type="number" value="2026" /></div>
+      <section class="panel dashboard-period" aria-label="Seleccionar periodo">
         <div class="field">
-          <label>Trimestre</label>
-          <select id="qQuarter">
-            <option value="1">Q1 (Ene-Mar)</option>
-            <option value="2">Q2 (Abr-Jun)</option>
-            <option value="3" selected>Q3 (Jul-Sep)</option>
-            <option value="4">Q4 (Oct-Dic)</option>
-          </select>
+          <label for="dashYear">Año</label>
+          <input id="dashYear" type="number" value="2026" />
         </div>
-        <button class="btn" id="btnLoadQuarter">Cargar trimestre</button>
+        <div class="field">
+          <label for="dashMonth">Mes</label>
+          <input id="dashMonth" type="number" min="1" max="12" value="9" />
+        </div>
+        <button class="btn" id="btnLoadDashboard">Actualizar</button>
+        <div class="status" id="dashStatus" role="status" aria-live="polite"></div>
+      </section>
+    </header>
+
+    <section class="dashboard-section" aria-label="Indicadores clave">
+      <div class="kpi-grid" id="kpiGrid"></div>
+    </section>
+
+    <section class="dashboard-section" aria-labelledby="capacityOverviewTitle">
+      <div class="dashboard-section-heading">
+        <div>
+          <h2 id="capacityOverviewTitle">Capacidad por equipo</h2>
+          <p class="section-description">Ocupación promedio del periodo y semana de mayor carga.</p>
+        </div>
       </div>
-      <div class="status" id="qStatus"></div>
-    </div>
+      <div class="dashboard-table-wrap">
+        <table>
+          <thead>
+            <tr><th>Equipo</th><th class="num">Ocupación promedio</th><th>Semana de mayor carga</th></tr>
+          </thead>
+          <tbody id="dashOccBody"></tbody>
+        </table>
+      </div>
+    </section>
 
-    <div class="chart-block">
-      <div class="chart-title">Pedidos a tiempo vs. atrasados por mes</div>
-      <div id="qOrdersChart"></div>
-    </div>
+    <section class="dashboard-section dashboard-trends" aria-labelledby="quarterOverviewTitle">
+      <div class="dashboard-section-heading">
+        <div>
+          <h2 id="quarterOverviewTitle">Tendencia trimestral</h2>
+          <p class="section-description">Evolución de entregas y ocupación de capacidad.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="form-row">
+          <div class="field">
+            <label for="qYear">Año</label>
+            <input id="qYear" type="number" value="2026" />
+          </div>
+          <div class="field">
+            <label for="qQuarter">Trimestre</label>
+            <select id="qQuarter">
+              <option value="1">Q1 (Ene-Mar)</option>
+              <option value="2">Q2 (Abr-Jun)</option>
+              <option value="3" selected>Q3 (Jul-Sep)</option>
+              <option value="4">Q4 (Oct-Dic)</option>
+            </select>
+          </div>
+          <button class="btn" id="btnLoadQuarter">Ver tendencia</button>
+        </div>
+        <div class="status" id="qStatus" role="status" aria-live="polite"></div>
+      </div>
 
-    <div class="chart-block">
-      <div class="chart-title">Ocupación promedio de planta por mes</div>
-      <div id="qOccChart"></div>
-    </div>
+      <div class="dashboard-chart-grid">
+        <section class="chart-block" aria-labelledby="quarterOrdersTitle">
+          <h3 class="chart-title" id="quarterOrdersTitle">Entregas a tiempo y atrasadas</h3>
+          <div id="qOrdersChart"></div>
+        </section>
+        <section class="chart-block" aria-labelledby="quarterOccupancyTitle">
+          <h3 class="chart-title" id="quarterOccupancyTitle">Ocupación promedio de planta</h3>
+          <div id="qOccChart"></div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <!-- EQUIPOS -->
   <div class="view" id="view-teams">
-    <h1>Equipos</h1>
-    <p class="view-desc">La ruta de proceso: cada equipo tiene una capacidad mensual, una disponibilidad en semanas, y un rendimiento.</p>
-
-    <div class="panel">
-      <div class="panel-title">Nuevo equipo</div>
-      <div class="form-row">
-        <div class="field"><label>Nombre</label><input id="teamName" /></div>
-        <div class="field"><label>Secuencia</label><input id="teamSeq" type="number" min="1" /></div>
-        <div class="field"><label>Capacidad mensual</label><input id="teamCap" type="number" step="0.01" /></div>
-        <div class="field"><label>Semanas disponibles</label><input id="teamWeeks" type="number" min="1" value="4" /></div>
-        <div class="field"><label>Rendimiento</label><input id="teamEff" type="number" step="0.01" min="0" max="1" value="0.95" /></div>
-        <button class="btn" id="btnCreateTeam">Crear</button>
+    <header class="teams-header">
+      <div>
+        <p class="teams-eyebrow">CONFIGURACIÓN DE PLANTA</p>
+        <h1>Equipos de producción</h1>
+        <p class="view-desc">Define la ruta de proceso y la capacidad disponible en cada etapa.</p>
       </div>
-      <div class="status" id="teamStatus"></div>
-    </div>
+    </header>
 
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Nombre</th><th class="num">Seq</th>
-          <th class="num">Cap. mensual</th><th class="num">Semanas</th><th class="num">Cap. semanal</th><th class="num">Rendimiento</th>
-        </tr>
-      </thead>
-      <tbody id="teamsBody"></tbody>
-    </table>
+    <section class="panel teams-form-panel" aria-labelledby="teamsFormTitle">
+      <div class="teams-section-heading">
+        <div>
+          <h2 id="teamsFormTitle">Agregar equipo</h2>
+          <p class="section-description">Cada equipo representa una etapa de la ruta de producción.</p>
+        </div>
+      </div>
+      <div class="teams-form-grid">
+        <div class="field">
+          <label for="teamName">Nombre del equipo</label>
+          <input id="teamName" />
+        </div>
+        <div class="field">
+          <label for="teamSeq">Orden en la ruta</label>
+          <input id="teamSeq" type="number" min="1" />
+        </div>
+        <div class="field">
+          <label for="teamCap">Capacidad mensual (t)</label>
+          <input id="teamCap" type="number" min="0.01" step="0.01" />
+        </div>
+        <div class="field">
+          <label for="teamWeeks">Semanas disponibles</label>
+          <input id="teamWeeks" type="number" min="1" value="4" />
+        </div>
+        <div class="field">
+          <label for="teamEff">Rendimiento esperado</label>
+          <input id="teamEff" type="number" min="0.01" max="1" step="0.01" value="0.95" />
+        </div>
+        <div class="field">
+          <label for="teamHoliday">Capacidad en festivos (%)</label>
+          <input id="teamHoliday" type="number" min="0" max="100" step="5" value="0" />
+        </div>
+        <div class="teams-form-actions">
+          <button class="btn" id="btnCreateTeam">Agregar equipo</button>
+          <div class="status" id="teamStatus" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="teams-list-section" aria-labelledby="teamsListTitle">
+      <div class="teams-section-heading">
+        <div>
+          <h2 id="teamsListTitle">Ruta de producción</h2>
+          <p class="section-description">Capacidad, disponibilidad y rendimiento configurados por etapa.</p>
+        </div>
+      </div>
+      <div class="teams-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Equipo</th>
+              <th class="num">Etapa</th>
+              <th class="num">Capacidad mensual</th>
+              <th class="num">Semanas disp.</th>
+              <th class="num">Capacidad semanal</th>
+              <th class="num">Rendimiento</th>
+              <th class="num">Capacidad en festivos</th>
+            </tr>
+          </thead>
+          <tbody id="teamsBody"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <!-- PEDIDOS -->
   <div class="view" id="view-orders">
-    <h1>Pedidos</h1>
-    <p class="view-desc">Cada pedido entra en un equipo de la ruta y lleva una fecha solicitada de entrega.</p>
+    <header class="orders-header">
+      <div>
+        <p class="orders-eyebrow">GESTIÓN DE PRODUCCIÓN</p>
+        <h1>Pedidos</h1>
+        <p class="view-desc">Registra y consulta los pedidos que alimentan la ruta de producción.</p>
+      </div>
+    </header>
 
-    <div class="panel">
-      <div class="panel-title" id="orderFormTitle">Nuevo pedido</div>
-      <div class="form-row">
-        <div class="field"><label>Cliente</label><input id="orderCust" /></div>
-        <div class="field"><label>Tonelaje</label><input id="orderQty" type="number" step="0.01" /></div>
-        <div class="field"><label>Equipo de entrada</label><select id="orderTeam"></select></div>
-        <div class="field"><label>Fecha de pedido</label><input id="orderDate" type="date" /></div>
-        <div class="field"><label>Fecha solicitada</label><input id="orderReqDate" type="date" /></div>
-        <div class="field"><label>Tipo de pedido</label>
+    <section class="panel orders-form-panel" aria-labelledby="orderFormTitle">
+      <div class="orders-section-heading">
+        <div>
+          <h2 class="panel-title" id="orderFormTitle">Nuevo pedido</h2>
+          <p class="section-description">Define el cliente, volumen, prioridad y fechas requeridas.</p>
+        </div>
+      </div>
+      <div class="orders-form-grid">
+        <div class="field">
+          <label for="orderCust">Cliente</label>
+          <input id="orderCust" autocomplete="organization" />
+        </div>
+        <div class="field">
+          <label for="orderQty">Tonelaje (t)</label>
+          <input id="orderQty" type="number" min="0.01" step="0.01" />
+        </div>
+        <div class="field">
+          <label for="orderTeam">Equipo de entrada</label>
+          <select id="orderTeam"></select>
+        </div>
+        <div class="field">
+          <label for="orderDate">Fecha de pedido</label>
+          <input id="orderDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="orderReqDate">Fecha solicitada</label>
+          <input id="orderReqDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="orderTipo">Tipo de pedido</label>
           <select id="orderTipo">
             <option value="">—</option>
             <option value="comercial">Comercial</option>
@@ -130,29 +235,98 @@
             <option value="especial">Especial</option>
           </select>
         </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <label style="flex-direction:row; align-items:center; gap:.4rem; font-size:.84rem; color:var(--text);">
-            <input id="orderPriority" type="checkbox" style="min-width:auto; width:auto;" /> Prioritario
-          </label>
-        </div>
-        <button class="btn" id="btnCreateOrder">Crear</button>
-        <button class="btn" id="btnCancelEditOrder" style="display:none; background:transparent; border-color:var(--border);">Cancelar</button>
+        <label class="orders-priority" for="orderPriority">
+          <input id="orderPriority" type="checkbox" />
+          <span>Marcar como prioritario</span>
+        </label>
       </div>
-      <div class="status" id="orderStatus"></div>
-    </div>
+      <div class="orders-form-actions">
+        <button class="btn" id="btnCreateOrder">Crear pedido</button>
+        <button class="btn orders-cancel-btn" id="btnCancelEditOrder" style="display:none;">Cancelar</button>
+        <div class="status" id="orderStatus" role="status" aria-live="polite"></div>
+      </div>
+    </section>
 
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Cliente</th><th class="num">Ton</th>
-          <th class="num">Equipo</th><th>F. pedido</th><th>F. solicitada</th>
-          <th>Tipo</th><th>Prior.</th>
-          <th>Periodo</th><th>F. calculada</th><th>Estado</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="ordersBody"></tbody>
-    </table>
+    <section class="orders-filter-panel" aria-label="Filtrar pedidos">
+      <div class="orders-filter-grid">
+        <div class="field">
+          <label for="fYear">Año</label>
+          <input id="fYear" type="number" value="2026" />
+        </div>
+        <div class="field">
+          <label for="fMonth">Mes</label>
+          <select id="fMonth"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label for="fSearch">Buscar cliente</label>
+          <input id="fSearch" type="search" placeholder="Nombre del cliente…" />
+        </div>
+        <div class="field">
+          <label for="fTipo">Tipo</label>
+          <select id="fTipo">
+            <option value="">Todos</option>
+            <option value="comercial">Comercial</option>
+            <option value="galvanizado">Galvanizado</option>
+            <option value="perfiles">Perfiles</option>
+            <option value="perfileros">Perfileros</option>
+            <option value="tuberia">Tubería</option>
+            <option value="ojalatero">Ojalatero</option>
+            <option value="especial">Especial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fStatus">Estado</label>
+          <select id="fStatus">
+            <option value="">Todos</option>
+            <option value="on_time">A tiempo</option>
+            <option value="warning">Atrasado</option>
+            <option value="critical">Crítico</option>
+            <option value="unplanned">Sin planear</option>
+          </select>
+        </div>
+        <label class="orders-filter-priority" for="fPriority">
+          <input id="fPriority" type="checkbox" />
+          <span>Solo prioritarios</span>
+        </label>
+      </div>
+    </section>
+
+    <div class="summary-box orders-summary" id="ordersSummary" role="status" aria-live="polite"></div>
+
+    <section class="orders-list-section" aria-labelledby="ordersListTitle">
+      <div class="orders-section-heading">
+        <div>
+          <h2 id="ordersListTitle">Pedidos registrados</h2>
+          <p class="section-description">Ordena los resultados por columna y usa los filtros para encontrar pedidos.</p>
+        </div>
+      </div>
+      <div class="orders-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="id" tabindex="0">ID</th>
+              <th data-sort="customer_name" tabindex="0">Cliente</th>
+              <th class="num" data-sort="quantity_requested" tabindex="0">Ton</th>
+              <th data-sort="team_name" tabindex="0">Equipo</th>
+              <th data-sort="order_date" tabindex="0">F. pedido</th>
+              <th data-sort="requested_delivery_date" tabindex="0">F. solicitada</th>
+              <th data-sort="tipo_pedido" tabindex="0">Tipo</th>
+              <th data-sort="is_priority" tabindex="0">Prior.</th>
+              <th data-sort="period" tabindex="0">Periodo</th>
+              <th data-sort="calculated_delivery_date" tabindex="0">F. calculada</th>
+              <th data-sort="days_late" tabindex="0">Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <nav class="orders-pager" aria-label="Paginación de pedidos">
+        <button class="btn small orders-page-btn" id="btnPrevPage" type="button" aria-label="Página anterior">‹</button>
+        <span id="pageInfo" aria-live="polite"></span>
+        <button class="btn small orders-page-btn" id="btnNextPage" type="button" aria-label="Página siguiente">›</button>
+      </nav>
+    </section>
   </div>
 
   <!-- DISPONIBILIDAD -->

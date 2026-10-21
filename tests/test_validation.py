@@ -2,7 +2,7 @@
 from datetime import date
 
 import pytest
-from helpers import create_order, create_plant
+from tests.helpers import create_order, create_plant
 
 GOOD_TEAM = dict(name="Equipo X", sequence_order=9, monthly_capacity=1000, efficiency=0.9)
 

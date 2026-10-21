@@ -3,7 +3,7 @@ import random
 
 import models
 from database import SessionLocal
-from helpers import (allocations_by_team_week, by_name, calc_dates, create_order, create_plant,
+from tests.helpers import (allocations_by_team_week, by_name, calc_dates, create_order, create_plant,
                      ledger_violations, plan)
 
 
@@ -114,3 +114,18 @@ def test_summary_counts_failures_in_compare(client):
     create_order(client, qty=1000, lead_days=40, name="imposible")
     cmp = client.get("/planning/compare", params=dict(year=2026, month=9)).json()["comparison"]
     assert all(info["summary"]["errors"] == 1 for info in cmp.values())
+
+
+def test_priority_criterion_moves_priority_order_ahead_of_earlier_due_date(client):
+    create_plant(client)
+    client.post("/team-week-exceptions", params=dict(team_id=4, year=2026, week_number=39, capacity_multiplier=0.06))
+    early = create_order(client, qty=1000, lead_days=1, name="Entrega temprana")
+    priority = create_order(client, qty=1000, lead_days=40, name="Prioritario", priority=True)
+
+    plan(client, 9, criterion="peps")
+    peps_dates = calc_dates(client)
+    assert peps_dates[early["id"]] < peps_dates[priority["id"]]
+
+    plan(client, 9, criterion="prioritario")
+    priority_dates = calc_dates(client)
+    assert priority_dates[priority["id"]] < priority_dates[early["id"]]
