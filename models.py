@@ -116,3 +116,20 @@ class MonthPlan(Base):
     planning_year = Column(Integer, nullable=False)
     planning_month = Column(Integer, nullable=False)  # 1-12
     criterion = Column(String(20), nullable=False)
+
+
+class ManualSlot(Base):
+    """
+    One order's place in a hand-made monthly sequence (or in Hold). Lets a
+    month planned with criterion "manual" be rebuilt exactly as the planner
+    arranged it whenever it is re-planned.
+    """
+    __tablename__ = "manual_slot"
+    __table_args__ = (UniqueConstraint("order_id", name="uq_manual_slot_order"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    planning_year = Column(Integer, nullable=False)
+    planning_month = Column(Integer, nullable=False)  # 1-12
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    position = Column(Integer, nullable=False)        # 0-based within its list (planned or Hold)
+    is_held = Column(Boolean, nullable=False, default=False)

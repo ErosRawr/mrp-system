@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 import models
 from calculations import calculate_material_requirements
-from heuristics import sort_orders_by_criterion
+from heuristics import sort_orders_by_criterion, sort_orders_peps
 from lateness import classify_lateness
 
 # How far ahead one team may be scheduled for one order. If an order cannot be
@@ -303,9 +303,38 @@ def _clear_allocations(order_ids, db: Session):
         db.flush()
 
 
+def _manual_split(year: int, month: int, db: Session):
+    """
+    (orders to plan, in sequence; held orders) for a month planned by hand.
+    Orders created after the sequence was saved have no slot: they go to the
+    end, in PEPS order.
+    """
+    orders = _orders_of_month(year, month, db)
+    slots = {
+        s.order_id: s
+        for s in db.query(models.ManualSlot).filter(
+            models.ManualSlot.planning_year == year,
+            models.ManualSlot.planning_month == month,
+        )
+    }
+    held = [o for o in orders if o.id in slots and slots[o.id].is_held]
+    placed = sorted(
+        (o for o in orders if o.id in slots and not slots[o.id].is_held),
+        key=lambda o: slots[o.id].position,
+    )
+    unplaced = sort_orders_peps([o for o in orders if o.id not in slots])
+    return placed + unplaced, held
+
+
 def _plan_month(year: int, month: int, criterion: str, db: Session):
     """Plans ONE month's orders into whatever capacity is currently free.
     Does not clear anything and does not commit."""
+    if criterion == "manual":
+        to_plan, held = _manual_split(year, month, db)
+        for order in held:                      # Hold = not planned, so no stale date
+            order.calculated_delivery_date = None
+            db.add(order)
+        return _plan_orders_in_sequence(to_plan, db)
     orders = sort_orders_by_criterion(_orders_of_month(year, month, db), criterion)
     return _plan_orders_in_sequence(orders, db)
 
@@ -362,6 +391,12 @@ def run_monthly_planning(planning_year: int, planning_month: int, db: Session, c
     else:
         mp.criterion = criterion
     db.flush()
+
+    if criterion != "manual":   # an automatic criterion replaces any hand-made sequence
+        db.query(models.ManualSlot).filter(
+            models.ManualSlot.planning_year == planning_year,
+            models.ManualSlot.planning_month == planning_month,
+        ).delete(synchronize_session=False)
 
     month_plans = _month_key_after(db.query(models.MonthPlan), planning_year, planning_month, inclusive=True).all()
     summaries = _replan_months(month_plans, db)

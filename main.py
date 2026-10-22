@@ -11,6 +11,7 @@ from calculations import calculate_material_requirements
 from database import engine, get_db
 from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP, DEFAULT_MAX_DROP
 from lateness import classify_lateness
+from manual_planning import ManualPlanRequest, preview_manual, save_manual
 from mexican_holidays import get_holiday_week_impact
 from planning import run_monthly_planning, compare_planning_criteria, replan_all
 from validation import (
@@ -270,6 +271,9 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
     # an order actually frees the capacity for other orders on re-planning.
     db.query(models.CapacityAllocation).filter(
         models.CapacityAllocation.order_id == order_id
+    ).delete(synchronize_session=False)
+    db.query(models.ManualSlot).filter(
+        models.ManualSlot.order_id == order_id
     ).delete(synchronize_session=False)
 
     db.delete(order)
@@ -559,6 +563,25 @@ def replan_everything(db: Session = Depends(get_db)):
     because plans already committed do not update on their own.
     """
     return replan_all(db)
+
+
+@app.post("/planning/preview-manual")
+def preview_manual_planning(req: ManualPlanRequest, db: Session = Depends(get_db)):
+    """
+    Plans a hand-made sequence (order_ids, in order; hold_ids excluded) WITHOUT
+    saving anything. The result is exactly what POST /planning/run-manual
+    would produce.
+    """
+    return preview_manual(req, db)
+
+
+@app.post("/planning/run-manual")
+def run_manual_planning(req: ManualPlanRequest, db: Session = Depends(get_db)):
+    """
+    Saves a hand-made sequence for the month and plans it. Later planned
+    months are re-planned too, each with its own criterion.
+    """
+    return save_manual(req, db)
 
 
 @app.get("/planning/months")
