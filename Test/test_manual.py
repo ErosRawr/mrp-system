@@ -144,3 +144,24 @@ def test_deleting_an_order_in_a_manual_month_does_not_break_replanning(client):
     months = client.post("/planning/replan-all").json()["months_replanned"]
     assert months[0]["orders_failed"] == 0 and months[0]["orders_planned"] == 2
     assert ledger_violations(client) == []
+
+
+def test_the_saved_sequence_can_be_read_back(client):
+    a, b, c = three_orders(client)
+    sequence = lambda: client.get("/planning/manual-sequence", params=dict(year=2026, month=9)).json()
+
+    assert sequence()["order_ids"] == [] and sequence()["hold_ids"] == []      # never planned by hand
+
+    manual(client, [b, c], [a])
+    assert sequence() == {"planning_year": 2026, "planning_month": 9, "order_ids": [b, c], "hold_ids": [a]}
+
+    manual(client, [c, a, b])                                                  # re-save replaces it
+    assert sequence()["order_ids"] == [c, a, b] and sequence()["hold_ids"] == []
+
+    plan(client, 9, "peps")                                                    # an automatic criterion clears it
+    assert sequence()["order_ids"] == [] and sequence()["hold_ids"] == []
+
+
+def test_manual_sequence_refuses_impossible_months(client):
+    assert client.get("/planning/manual-sequence", params=dict(year=2026, month=13)).status_code == 400
+    assert client.get("/planning/manual-sequence", params=dict(year=1500, month=1)).status_code == 400

@@ -18,7 +18,6 @@ async function refresh(view) {
     if (view === "exceptions") {
       await populateTeamDropdown("excTeam");
       await populateTeamDropdown("holidayTeam");
-      await populateTeamDropdown("distTeam", "Todos los equipos");
       await loadExceptions();
     }
     if (view === "calendar") await populateTeamDropdown("calTeam");

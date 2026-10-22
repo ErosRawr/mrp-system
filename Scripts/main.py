@@ -11,7 +11,7 @@ from calculations import calculate_material_requirements
 from database import engine, get_db
 from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP, DEFAULT_MAX_DROP
 from lateness import classify_lateness
-from manual_planning import ManualPlanRequest, preview_manual, save_manual
+from manual_planning import ManualPlanRequest, manual_sequence, preview_manual, save_manual
 from mexican_holidays import get_holiday_week_impact
 from planning import run_monthly_planning, compare_planning_criteria, replan_all
 from validation import (
@@ -582,6 +582,12 @@ def run_manual_planning(req: ManualPlanRequest, db: Session = Depends(get_db)):
     months are re-planned too, each with its own criterion.
     """
     return save_manual(req, db)
+
+
+@app.get("/planning/manual-sequence")
+def get_manual_sequence(year: int, month: int, db: Session = Depends(get_db)):
+    """The saved hand-made sequence (planned and Hold, in order) for a month."""
+    return manual_sequence(year, month, db)
 
 
 @app.get("/planning/months")

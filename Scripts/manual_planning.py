@@ -171,3 +171,26 @@ def save_manual(req: ManualPlanRequest, db: Session):
     result = run_monthly_planning(req.year, req.month, db, criterion="manual")
     result["held_order_ids"] = req.hold_ids
     return result
+
+
+def manual_sequence(year: int, month: int, db: Session):
+    """
+    The saved hand-made sequence for a month, so the planner can see it again
+    after a reload. Both lists are in saved order; they are empty when the month
+    was never planned by hand (or an automatic criterion replaced the sequence).
+    """
+    require_year(year)
+    require_month(month)
+    slots = (
+        db.query(models.ManualSlot)
+        .filter(models.ManualSlot.planning_year == year,
+                models.ManualSlot.planning_month == month)
+        .order_by(models.ManualSlot.is_held, models.ManualSlot.position)
+        .all()
+    )
+    return {
+        "planning_year": year,
+        "planning_month": month,
+        "order_ids": [s.order_id for s in slots if not s.is_held],
+        "hold_ids": [s.order_id for s in slots if s.is_held],
+    }

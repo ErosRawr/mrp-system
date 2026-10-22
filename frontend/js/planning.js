@@ -66,8 +66,12 @@ async function loadPlanMonth() {
 
     setStatus("planHeaderStatus", `${planMonthOrders.length} pedido(s) en ${year}-${String(month).padStart(2, "0")}.`);
 
-    // Populate manual blocks (all orders start in Standard)
-    populateManualBlocks(planMonthOrders);
+    // Populate manual blocks. A month planned by hand comes back as it was
+    // saved; any other month starts with every order in Standard.
+    const sequence = planSavedCriterion === "manual"
+      ? await api(`/planning/manual-sequence?year=${year}&month=${month}`)
+      : null;
+    populateManualBlocks(planMonthOrders, sequence);
 
     // Clear previous results
     clearResults();
@@ -159,8 +163,7 @@ qs("btnCommitCriterion").addEventListener("click", async () => {
 
 /* ── Manual blocks: drag & drop + filters ────────────────── */
 
-function populateManualBlocks(orders) {
-  // Put all orders in Standard by default
+function populateManualBlocks(orders, sequence = null) {
   const containers = {
     expedite: qs("panelManual").querySelector('[data-block-id="expedite"]'),
     standard: qs("panelManual").querySelector('[data-block-id="standard"]'),
@@ -168,10 +171,23 @@ function populateManualBlocks(orders) {
   };
   Object.values(containers).forEach(c => { if (c) c.innerHTML = ""; });
 
-  orders.forEach(o => {
-    const card = createOrderCard(o);
-    containers.standard.appendChild(card);
-  });
+  // Saved sequence first (planned orders, then Hold). The backend stores one flat
+  // order, so Expedite vs Standard is not remembered: everything planned lands in
+  // Standard. Anything not in the sequence (an order added after saving) goes at
+  // the end of Standard, which is also where the planner puts it.
+  const byId = new Map(orders.map(o => [o.id, o]));
+  const placed = new Set();
+  const place = (id, container) => {
+    const order = byId.get(id);
+    if (!order || placed.has(id)) return;
+    container.appendChild(createOrderCard(order));
+    placed.add(id);
+  };
+  if (sequence) {
+    sequence.order_ids.forEach(id => place(id, containers.standard));
+    sequence.hold_ids.forEach(id => place(id, containers.hold));
+  }
+  orders.forEach(o => place(o.id, containers.standard));
 
   updateBlockCounts();
   applyManualFilters();
