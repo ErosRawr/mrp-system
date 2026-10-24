@@ -4,7 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MRP — Ruta de Proceso</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/availability.css" />
+  <link rel="stylesheet" href="css/planning.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <link rel="stylesheet" href="css/teams.css" />
+  <link rel="stylesheet" href="css/orders.css" />
+  <link rel="stylesheet" href="css/orders-table.css" />
   <link rel="stylesheet" href="css/loading.css" />
 </head>
 <body>
@@ -570,6 +577,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Table / Gantt switch -->
+    <div class="results-switch" id="resultsSwitch" style="display:none;">
+      <button class="results-tab active" data-results-view="table">Tabla</button>
+      <button class="results-tab" data-results-view="gantt">Gantt</button>
+    </div>
+
+    <!-- Gantt -->
+    <div id="planGantt" style="display:none;"></div>
 
     <!-- Results table -->
     <table id="planResultsTable" style="display:none;">

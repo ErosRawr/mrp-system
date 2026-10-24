@@ -1,0 +1,50 @@
+/* availability.css — Ocupación bars and the Calendario grid. */
+  /* ── Occupancy bars ───────────────────────────────────────── */
+  .occ-team-block { margin-bottom: 1.4rem; }
+  .occ-team-name { font-size: .82rem; color: var(--text); margin-bottom: .5rem; font-weight: 600; }
+  .occ-bar-row { display: flex; align-items: center; gap: .6rem; margin-bottom: .3rem; }
+  .occ-week-label { width: 70px; font-size: .72rem; color: var(--text-faint); font-family: var(--mono); flex-shrink: 0; }
+  .occ-track {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    height: 18px;
+    overflow: hidden;
+    position: relative;
+  }
+  .occ-fill {
+    height: 100%;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 6px;
+    font-size: .68rem;
+    color: #fff;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .occ-fill.over { background: var(--danger); }
+  .occ-fill.holiday { background: var(--warn); }
+  .occ-reason { font-size: .72rem; color: var(--text-faint); width: 140px; flex-shrink: 0; }
+
+  /* ── Calendar ─────────────────────────────────────────────── */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .4rem;
+  }
+  .cal-week {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .5rem .6rem;
+    font-size: .74rem;
+  }
+  .cal-week.full { border-left: 2px solid var(--good); }
+  .cal-week.reduced { border-left: 2px solid var(--warn); }
+  .cal-week.off { border-left: 2px solid var(--danger); }
+  .cal-week-num { font-family: var(--mono); color: var(--text-dim); font-size: .7rem; }
+  .cal-week-pct { font-family: var(--mono); font-size: 1rem; color: #fff; margin: .2rem 0; }
+  .cal-week-reason { color: var(--text-faint); font-size: .68rem; line-height: 1.3; }

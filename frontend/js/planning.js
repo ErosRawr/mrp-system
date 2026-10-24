@@ -425,6 +425,25 @@ function clearPreviewState() {
 
 /* ── Results display (shared) ────────────────────────────── */
 
+let resultsView = "table";   // "table" | "gantt"
+let lastResults = null;      // what the table and the Gantt are showing
+
+function applyResultsView() {
+  const gantt = resultsView === "gantt";
+  qs("planResultsTable").style.display = gantt ? "none" : "table";
+  qs("planGantt").style.display = gantt ? "block" : "none";
+  document.querySelectorAll("[data-results-view]").forEach(b =>
+    b.classList.toggle("active", b.dataset.resultsView === resultsView));
+  if (gantt && lastResults) renderGantt(lastResults, qs("planGantt"));
+}
+
+document.querySelectorAll("[data-results-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    resultsView = btn.dataset.resultsView;
+    applyResultsView();
+  });
+});
+
 function showResults(results, summaryText) {
   const summary = qs("planSummary");
   summary.style.display = "block";
@@ -460,7 +479,9 @@ function showResults(results, summaryText) {
     body.appendChild(tr);
   });
 
-  qs("planResultsTable").style.display = "table";
+  lastResults = results;
+  qs("resultsSwitch").style.display = "flex";
+  applyResultsView();
 }
 
 function showImpact(summary) {
@@ -475,7 +496,10 @@ function clearResults() {
   qs("planSummary").style.display = "none";
   qs("planImpact").style.display = "none";
   qs("planResultsTable").style.display = "none";
+  qs("planGantt").style.display = "none";
+  qs("resultsSwitch").style.display = "none";
   qs("planBody").innerHTML = "";
+  lastResults = null;
 }
 
 /* ── Route diagram (unchanged) ───────────────────────────── */
@@ -503,7 +527,7 @@ function togglePlanRouteDiagram(result, rowEl) {
 }
 
 function renderPlanWeekDiagram(teamSchedule, container) {
-  const production = [...teamSchedule].reverse();
+  const production = teamSchedule;   // already in production order (first team first)
   const boxWidth = 160, boxHeight = 70, gap = 60;
   const width = production.length * boxWidth + (production.length - 1) * gap + 40;
   const height = 150;
@@ -544,4 +568,170 @@ function renderPlanWeekDiagram(teamSchedule, container) {
   });
 
   container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; max-width:${width}px;">${svg}</svg>`;
+}
+
+
+/* ── Gantt: one row per order, in scheduling order ─────────
+   Each bar is one team's stage of the route, placed on the ISO weeks the
+   planner allocated. The dot after the last bar is the calculated delivery
+   (colored by lateness status); the vertical line is the requested date. */
+
+const GANTT_CELL = 30;   // px per week column
+const GANTT_WEEK_MS = 7 * 86400000;
+const GANTT_DAY_MS = 86400000;
+const GANTT_MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+// One shade per team along the route (blue family, so it never reads as lateness).
+const GANTT_TEAM_COLORS = [
+  { bg: "#2d5f80", fg: "#fff" }, { bg: "#3b7fae", fg: "#fff" },
+  { bg: "#4a9eda", fg: "#0f1215" }, { bg: "#86bfe9", fg: "#0f1215" },
+];
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* UTC milliseconds of the Monday that starts ISO week `week` of `year`. */
+function isoWeekMonday(year, week) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dow = jan4.getUTCDay() || 7;
+  return Date.UTC(year, 0, 4 - (dow - 1) + (week - 1) * 7);
+}
+
+/* ISO { year, week } of a UTC timestamp. */
+function isoWeekOfMs(ms) {
+  const d = new Date(ms);
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));   // the Thursday of that week
+  const year = d.getUTCFullYear();
+  return { year, week: Math.ceil(((d - Date.UTC(year, 0, 1)) / GANTT_DAY_MS + 1) / 7) };
+}
+
+/* The stages (one per team) the planner allocated for an order, as week spans. */
+function ganttStages(result) {
+  return (result.team_schedule || [])
+    .filter(s => s.breakdown && s.breakdown.length)
+    .map(s => {
+      const first = s.breakdown[0], last = s.breakdown[s.breakdown.length - 1];
+      return {
+        team: s.team_name,
+        start: isoWeekMonday(first.year, first.week_number),
+        end: isoWeekMonday(last.year, last.week_number),
+        firstWeek: first.week_number,
+        lastWeek: last.week_number,
+        tons: s.breakdown.reduce((sum, b) => sum + b.allocated, 0),
+      };
+    });
+}
+
+function renderGantt(results, container) {
+  const planned = results.filter(r => !r.error && ganttStages(r).length);
+  if (!planned.length) {
+    container.innerHTML = '<div class="gantt-empty">No hay pedidos planeados para mostrar.</div>';
+    return;
+  }
+
+  // Teams in route order: every chain starts at the first team, so first appearance is route order.
+  const teamNames = [];
+  planned.forEach(r => (r.team_schedule || []).forEach(s => {
+    if (!teamNames.includes(s.team_name)) teamNames.push(s.team_name);
+  }));
+  const colorOf = name => GANTT_TEAM_COLORS[teamNames.indexOf(name) % GANTT_TEAM_COLORS.length];
+
+  // The time axis covers every bar and every requested date, plus one spare column
+  // on the right for the delivery dot.
+  const requestedMs = r => r.requested_delivery_date ? Date.parse(r.requested_delivery_date + "T00:00:00Z") : null;
+  const mondayOf = ms => ms - (((new Date(ms).getUTCDay() || 7) - 1) * GANTT_DAY_MS);
+  const marks = [];
+  planned.forEach(r => {
+    ganttStages(r).forEach(s => marks.push(s.start, s.end));
+    if (requestedMs(r) !== null) marks.push(mondayOf(requestedMs(r)));
+  });
+  const baseMs = Math.min(...marks);
+  const columns = Math.round((Math.max(...marks) - baseMs) / GANTT_WEEK_MS) + 2;
+  const column = ms => Math.round((ms - baseMs) / GANTT_WEEK_MS);
+  const trackWidth = columns * GANTT_CELL;
+
+  // Header: month labels over the week numbers (a week belongs to the month of its Thursday).
+  let monthsHtml = "", weeksHtml = "";
+  let runStart = 0, runKey = null;
+  const closeRun = end => {
+    if (runKey === null) return;
+    const [year, month] = runKey.split("-").map(Number);
+    // "Oct 2026" needs about three columns; a month that only spans one or two shows just "Oct".
+    const text = end - runStart >= 3 ? `${GANTT_MONTHS[month]} ${year}` : GANTT_MONTHS[month];
+    monthsHtml += `<span class="gantt-month" style="left:${runStart * GANTT_CELL}px; width:${(end - runStart) * GANTT_CELL}px" ` +
+                  `title="${GANTT_MONTHS[month]} ${year}">${text}</span>`;
+  };
+  for (let i = 0; i < columns; i++) {
+    const monday = baseMs + i * GANTT_WEEK_MS;
+    const thursday = new Date(monday + 3 * GANTT_DAY_MS);
+    const key = `${thursday.getUTCFullYear()}-${thursday.getUTCMonth()}`;
+    if (key !== runKey) { closeRun(i); runStart = i; runKey = key; }
+    weeksHtml += `<span class="gantt-week">${isoWeekOfMs(monday).week}</span>`;
+  }
+  closeRun(columns);
+
+  // Rows, in the order the planner scheduled the orders.
+  let rowsHtml = "";
+  results.forEach((r, i) => {
+    const label = `<div class="gantt-label" title="#${r.order_id} ${escapeHtml(r.customer_name)}">` +
+      `<span class="gantt-seq">${i + 1}</span>` +
+      `${r.is_priority ? '<span class="priority-star">★</span>' : ""}` +
+      `<span>#${r.order_id} ${escapeHtml(r.customer_name)}</span></div>`;
+
+    if (r.error) {
+      rowsHtml += `<div class="gantt-row">${label}<div class="gantt-track" style="width:${trackWidth}px">` +
+        `<span class="gantt-error">${escapeHtml(r.error)}</span></div></div>`;
+      return;
+    }
+
+    const stages = ganttStages(r);
+    let inner = "";
+
+    const reqMs = requestedMs(r);
+    if (reqMs !== null) {
+      const dow = new Date(reqMs).getUTCDay() || 7;
+      const x = (column(mondayOf(reqMs)) + (dow - 0.5) / 7) * GANTT_CELL;
+      inner += `<div class="gantt-req" style="left:${x.toFixed(1)}px" title="Fecha solicitada: ${r.requested_delivery_date}"></div>`;
+    }
+
+    stages.forEach(s => {
+      const left = column(s.start) * GANTT_CELL + 1;
+      const width = (column(s.end) - column(s.start) + 1) * GANTT_CELL - 2;
+      const color = colorOf(s.team);
+      const weeks = s.firstWeek === s.lastWeek ? `sem ${s.firstWeek}` : `sem ${s.firstWeek}–${s.lastWeek}`;
+      const tons = Math.round(s.tons).toLocaleString();
+      inner += `<div class="gantt-bar" style="left:${left}px; width:${width}px; background:${color.bg}; color:${color.fg}" ` +
+               `title="${escapeHtml(s.team)} · ${weeks} · ${tons} t">${teamNames.indexOf(s.team) + 1}</div>`;
+    });
+
+    const lastEnd = stages[stages.length - 1].end;
+    const late = r.days_late > 0 ? ` · ${r.days_late} día(s) después de lo solicitado` : "";
+    inner += `<div class="gantt-dot ${r.lateness_status || ""}" style="left:${(column(lastEnd) + 1) * GANTT_CELL + 3}px" ` +
+             `title="Entrega calculada: ${r.calculated_delivery_date}${late}"></div>`;
+
+    rowsHtml += `<div class="gantt-row">${label}<div class="gantt-track" style="width:${trackWidth}px">${inner}</div></div>`;
+  });
+
+  const legend = teamNames.map((name, i) =>
+    `<span><span class="legend-swatch" style="background:${colorOf(name).bg}"></span>${i + 1} · ${escapeHtml(name)}</span>`).join("") +
+    '<span><span class="gantt-key-req"></span>fecha solicitada</span>' +
+    '<span><span class="gantt-dot-key on_time"></span>a tiempo</span>' +
+    '<span><span class="gantt-dot-key warning"></span>atrasado</span>' +
+    '<span><span class="gantt-dot-key critical"></span>crítico</span>';
+
+  container.innerHTML = `
+    <div class="gantt-scroll">
+      <div class="gantt" style="--gantt-cell:${GANTT_CELL}px">
+        <div class="gantt-row gantt-head">
+          <div class="gantt-label"><span class="gantt-seq">#</span><span>Pedido (orden de planeación)</span></div>
+          <div class="gantt-track" style="width:${trackWidth}px">
+            <div class="gantt-months">${monthsHtml}</div>
+            <div class="gantt-weeks">${weeksHtml}</div>
+          </div>
+        </div>
+        ${rowsHtml}
+      </div>
+    </div>
+    <div class="chart-legend gantt-legend">${legend}</div>`;
 }
