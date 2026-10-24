@@ -586,26 +586,6 @@ const GANTT_TEAM_COLORS = [
   { bg: "#4a9eda", fg: "#0f1215" }, { bg: "#86bfe9", fg: "#0f1215" },
 ];
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, c =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-/* UTC milliseconds of the Monday that starts ISO week `week` of `year`. */
-function isoWeekMonday(year, week) {
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const dow = jan4.getUTCDay() || 7;
-  return Date.UTC(year, 0, 4 - (dow - 1) + (week - 1) * 7);
-}
-
-/* ISO { year, week } of a UTC timestamp. */
-function isoWeekOfMs(ms) {
-  const d = new Date(ms);
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));   // the Thursday of that week
-  const year = d.getUTCFullYear();
-  return { year, week: Math.ceil(((d - Date.UTC(year, 0, 1)) / GANTT_DAY_MS + 1) / 7) };
-}
-
 /* The stages (one per team) the planner allocated for an order, as week spans. */
 function ganttStages(result) {
   return (result.team_schedule || [])

@@ -20,7 +20,7 @@ async function refresh(view) {
       await populateTeamDropdown("holidayTeam");
       await loadExceptions();
     }
-    if (view === "calendar") await populateTeamDropdown("calTeam");
+    if (view === "calendar") { await populateTeamDropdown("calTeam"); await loadCalendar(); }
     if (view === "requirements") await populateOrderDropdown("reqOrder");
     if (view === "planning") await loadPlanMonth();
   } catch (e) { console.error(e); }

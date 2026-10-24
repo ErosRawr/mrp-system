@@ -76,3 +76,34 @@ async function populateOrderDropdown(selectId) {
     sel.appendChild(opt);
   });
 }
+
+/* ── Shared helpers: HTML escaping and ISO weeks ─────────────
+   Use escapeHtml for any user text that goes into innerHTML.
+   ISO weeks (Monday start; week 1 is the one holding January 4th) are what the
+   backend stores in CapacityAllocation and TeamWeekException. Timestamps are
+   UTC milliseconds, so the browser's time zone can never shift a date. */
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* UTC milliseconds of the Monday that starts ISO week `week` of `year`. */
+function isoWeekMonday(year, week) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dow = jan4.getUTCDay() || 7;
+  return Date.UTC(year, 0, 4 - (dow - 1) + (week - 1) * 7);
+}
+
+/* ISO { year, week } of a UTC timestamp. */
+function isoWeekOfMs(ms) {
+  const d = new Date(ms);
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));   // the Thursday of that week
+  const year = d.getUTCFullYear();
+  return { year, week: Math.ceil(((d - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7) };
+}
+
+/* 52 or 53: December 28th always falls in the last ISO week of its year. */
+function isoWeeksInYear(year) {
+  return isoWeekOfMs(Date.UTC(year, 11, 28)).week;
+}

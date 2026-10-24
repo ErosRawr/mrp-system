@@ -32,6 +32,18 @@ def _iso_year_week(d: date):
     return iso[0], iso[1]
 
 
+def _weeks_in_year(year: int) -> int:
+    """ISO years have 52 or 53 weeks. December 28th always falls in the last one."""
+    return date(year, 12, 28).isocalendar()[1]
+
+
+def _next_week(year: int, week_number: int):
+    """The ISO week after (year, week_number), rolling into the next year after its LAST week."""
+    if week_number >= _weeks_in_year(year):
+        return year + 1, 1
+    return year, week_number + 1
+
+
 def _week_end_date(year: int, week_number: int):
     """
     Returns the Sunday (end of week) for a given ISO year/week -- used
@@ -135,10 +147,7 @@ def _schedule_team_weekly(team_id: int, order_id: int, quantity_needed: float,
             remaining_needed -= allocate_this_week
 
         if remaining_needed > 0:
-            week += 1
-            if week > 52:
-                week = 1
-                year += 1
+            year, week = _next_week(year, week)
             weeks_elapsed += 1
 
     return {
@@ -220,11 +229,7 @@ def _plan_orders_in_sequence(orders, db: Session):
                 )
                 break
 
-            next_week = result["end_week"] + 1
-            next_year = result["end_year"]
-            if next_week > 52:
-                next_week = 1
-                next_year += 1
+            next_year, next_week = _next_week(result["end_year"], result["end_week"])
 
         if failure:
             # Never keep a half-scheduled order: free what it claimed, and clear

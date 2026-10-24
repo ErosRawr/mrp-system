@@ -376,7 +376,7 @@
   <!-- CALENDARIO -->
   <div class="view" id="view-calendar">
     <h1>Calendario de disponibilidad</h1>
-    <p class="view-desc">Vista de todas las semanas del año para un equipo, con sus excepciones marcadas.</p>
+    <p class="view-desc">El año completo de un equipo, semana por semana. Cada semana muestra el porcentaje de capacidad disponible; los festivos, el mantenimiento y las bajas de productividad se marcan con color y se listan abajo.</p>
 
     <div class="panel">
       <div class="form-row">
@@ -387,7 +387,9 @@
       <div class="status" id="calStatus"></div>
     </div>
 
-    <div class="cal-grid" id="calGrid"></div>
+    <div id="calSummary"></div>
+    <div class="cal-months" id="calMonths"></div>
+    <div id="calExceptions"></div>
   </div>
 
   <!-- REQUERIMIENTOS -->
