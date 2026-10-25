@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/teams.css" />
   <link rel="stylesheet" href="css/orders.css" />
   <link rel="stylesheet" href="css/orders-table.css" />
+  <link rel="stylesheet" href="css/requirements.css" />
   <link rel="stylesheet" href="css/loading.css" />
 </head>
 <body>
@@ -395,28 +396,21 @@
   <!-- REQUERIMIENTOS -->
   <div class="view" id="view-requirements">
     <h1>Requerimientos de material</h1>
-    <p class="view-desc">Cálculo puro de material por equipo, en base al rendimiento. Sin fechas ni capacidad (eso corresponde a la planeación mensual).</p>
+    <p class="view-desc">Cuánto material necesita cada equipo para entregar el tonelaje pedido, calculado hacia atrás con el rendimiento de cada equipo. Elige un pedido para ver dónde se pierde el acero, o el mes completo para ver el total. Sin fechas: eso corresponde a la planeación mensual.</p>
 
     <div class="panel">
       <div class="form-row">
+        <div class="field"><label>Año</label><input id="reqYear" type="number" value="2026" /></div>
+        <div class="field"><label>Mes</label><input id="reqMonth" type="number" min="1" max="12" value="9" /></div>
         <div class="field"><label>Pedido</label><select id="reqOrder"></select></div>
         <button class="btn" id="btnCalcReq">Calcular</button>
       </div>
       <div class="status" id="reqStatus"></div>
     </div>
 
-    <div class="summary-box" id="reqSummary" style="display:none;"></div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Equipo</th><th class="num">Seq</th>
-          <th class="num">Ton. salida</th><th class="num">Ton. entrada</th>
-          <th class="num">Rend.</th><th class="num">Cap. mensual</th><th class="num">Cap. semanal</th>
-        </tr>
-      </thead>
-      <tbody id="reqBody"></tbody>
-    </table>
+    <div id="reqCards"></div>
+    <div id="reqFlow"></div>
+    <div id="reqTables"></div>
   </div>
 
   <!-- PLANEACIÓN (unified workspace) -->

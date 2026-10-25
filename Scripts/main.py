@@ -7,7 +7,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 import models
-from calculations import calculate_material_requirements
+from calculations import calculate_material_requirements, monthly_requirements
 from database import engine, get_db
 from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP, DEFAULT_MAX_DROP
 from lateness import classify_lateness
@@ -505,6 +505,18 @@ def get_order_requirements(order_id: int, db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(404, "Order or entry team not found")
     return result
+
+
+@app.get("/requirements")
+def get_monthly_requirements(year: int, month: int, db: Session = Depends(get_db)):
+    """
+    The material requirement of every order planned for (year, month), added
+    up: month totals, one line per order, and the tons each team must process.
+    Pure material calculation, like GET /orders/{id}/requirements.
+    """
+    require_year(year)
+    require_month(month)
+    return monthly_requirements(year, month, db)
 
 
 @app.post("/planning/run")

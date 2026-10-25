@@ -1,0 +1,56 @@
+/* requirements.css — Requerimientos de material: order flow, month load bars, order rows. */
+  .req-cards { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 1.2rem; }
+  .req-cards .kpi-value { font-size: 1.4rem; }
+
+  .req-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+  .req-title { font-size: 1rem; font-weight: 600; color: #fff; }
+  .req-sub { margin-top: .2rem; font-size: .78rem; color: var(--text-dim); }
+  .req-section-title { margin: 1.4rem 0 .6rem; font-size: .78rem; font-weight: 600; color: var(--text-dim); }
+  .req-hint { font-weight: 400; color: var(--text-faint); }
+  .req-note { margin: -.2rem 0 .7rem; max-width: 70ch; font-size: .76rem; line-height: 1.5; color: var(--text-faint); }
+  .req-empty, .req-error {
+    padding: .8rem 1rem;
+    margin-bottom: 1rem;
+    font-size: .82rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-faint);
+  }
+  .req-error { color: var(--danger); border-color: rgba(217,105,90,.35); }
+
+  .req-flow { padding: .3rem .9rem; background: var(--panel); border: 1px solid var(--border); border-radius: 3px; }
+  .req-flow-row, .req-load-row {
+    display: grid;
+    grid-template-columns: 10rem 1fr 15.5rem;
+    gap: .9rem;
+    align-items: center;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .req-flow-row:last-child, .req-load-row:last-child { border-bottom: none; }
+  .req-flow-team { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--text); }
+  .req-flow-step { width: 1rem; text-align: right; font-family: var(--mono); font-size: .68rem; color: var(--text-faint); }
+  .req-flow-nums { font-family: var(--mono); font-size: .76rem; color: var(--text); text-align: right; white-space: nowrap; }
+  .req-flow-lost { margin-left: .5rem; color: var(--danger); }
+
+  .req-flow-track { height: 22px; }
+  .req-flow-bar { display: flex; height: 100%; min-width: 4px; overflow: hidden; border-radius: 2px; }
+  .req-flow-out { background: var(--accent); }
+  .req-flow-loss, .req-key.loss {
+    flex: 1;
+    background-image: repeating-linear-gradient(135deg,
+      rgba(217,105,90,.6) 0, rgba(217,105,90,.6) 4px, rgba(217,105,90,.22) 4px, rgba(217,105,90,.22) 8px);
+  }
+
+  .req-load-track { height: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+  .req-load-fill { height: 100%; background: var(--accent-dim); }
+  .req-load-fill.over { background: var(--danger); }
+  .req-load-pct { margin-left: .5rem; color: var(--text-dim); }
+  .req-load-pct.over { color: var(--danger); font-weight: 600; }
+
+  .req-key { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+  .req-key.out { background: var(--accent); }
+  .req-key.loss { flex: none; }
+
+  tr.req-row { cursor: pointer; }
