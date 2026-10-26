@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/availability.css" />
+  <link rel="stylesheet" href="css/occupancy.css" />
   <link rel="stylesheet" href="css/planning.css" />
   <link rel="stylesheet" href="css/dashboard.css" />
   <link rel="stylesheet" href="css/teams.css" />
@@ -613,18 +614,24 @@
   <!-- OCUPACION -->
   <div class="view" id="view-occupancy">
     <h1>Ocupación por equipo</h1>
-    <p class="view-desc">Porcentaje de capacidad semanal utilizada, para todos los equipos de la ruta durante un mes.</p>
+    <p class="view-desc">Qué parte de la capacidad semanal de cada equipo está comprometida con pedidos planeados. Haz clic en una semana para ver qué pedidos la ocupan.</p>
 
     <div class="panel">
       <div class="form-row">
         <div class="field"><label>Año</label><input id="occYear" type="number" value="2026" /></div>
         <div class="field"><label>Mes</label><input id="occMonth" type="number" min="1" max="12" value="9" /></div>
-        <button class="btn" id="btnGetOccupancy">Ver todos los equipos</button>
+        <div class="occ-nav">
+          <button class="btn" id="btnOccPrev" type="button" aria-label="Mes anterior" title="Mes anterior">‹</button>
+          <button class="btn" id="btnOccNext" type="button" aria-label="Mes siguiente" title="Mes siguiente">›</button>
+        </div>
+        <button class="btn" id="btnGetOccupancy">Ver</button>
       </div>
       <div class="status" id="occStatus"></div>
     </div>
 
-    <div id="occAllTeams"></div>
+    <div id="occKpis"></div>
+    <div class="occ-card" id="occMap"></div>
+    <div id="occDetail"></div>
   </div>
 
 </main>
