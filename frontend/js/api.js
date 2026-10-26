@@ -32,6 +32,9 @@ function setStatus(id, msg, isError = false) {
 function setLoading(buttonId, loadingText = "Cargando") {
   const btn = qs(buttonId);
   if (!btn) return () => {};
+  // Already loading (a second request started before the first finished): leave it to the
+  // first caller to restore the button, so the spinner text is never saved as the "original" label.
+  if (btn.classList.contains("btn-loading")) return () => {};
 
   const originalText = btn.textContent;
   const originalDisabled = btn.disabled;
@@ -106,4 +109,16 @@ function isoWeekOfMs(ms) {
 /* 52 or 53: December 28th always falls in the last ISO week of its year. */
 function isoWeeksInYear(year) {
   return isoWeekOfMs(Date.UTC(year, 11, 28)).week;
+}
+
+/* "7 sep" for a UTC timestamp, and "7 sep – 13 sep" for a whole ISO week. */
+function shortDate(ms) {
+  const d = new Date(ms);
+  const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  return `${d.getUTCDate()} ${months[d.getUTCMonth()]}`;
+}
+
+function weekRangeLabel(year, week) {
+  const monday = isoWeekMonday(year, week);
+  return `${shortDate(monday)} – ${shortDate(monday + 6 * 86400000)}`;
 }

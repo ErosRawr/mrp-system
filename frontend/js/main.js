@@ -23,6 +23,7 @@ async function refresh(view) {
     if (view === "calendar") { await populateTeamDropdown("calTeam"); await loadCalendar(); }
     if (view === "requirements") await refreshRequirements();
     if (view === "planning") await loadPlanMonth();
+    if (view === "occupancy") await loadOccupancy();
   } catch (e) { console.error(e); }
 }
 
