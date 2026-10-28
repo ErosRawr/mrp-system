@@ -1,17 +1,4 @@
 /* occupancy.css — Ocupación: summary cards, team × week heat map, and the week drill-down. */
-  /* One color language for every "how busy" element (cells, pills, legend keys, detail card). */
-  .lvl-none   { --lvl: var(--border);      --tint: transparent; }
-  .lvl-low    { --lvl: var(--accent-dim);  --tint: rgba(74,158,218,.08); }
-  .lvl-ok     { --lvl: var(--accent);      --tint: rgba(74,158,218,.18); }
-  .lvl-high   { --lvl: var(--warn);        --tint: rgba(217,154,78,.18); }
-  .lvl-full   { --lvl: var(--danger);      --tint: rgba(217,105,90,.22); }
-  .lvl-over   { --lvl: var(--danger);      --tint: rgba(217,105,90,.30); }
-  .lvl-closed { --lvl: var(--text-faint);  --tint: rgba(131,141,148,.10); }
-
-  .occ-nav { display: flex; gap: .3rem; }
-  .occ-nav .btn { width: 32px; padding: 0; font-size: 1.1rem; line-height: 1; background: transparent; border-color: var(--border); color: var(--text-dim); }
-  .occ-nav .btn:hover { color: #fff; border-color: var(--accent); background: transparent; }
-
   .occ-kpis { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .occ-empty {
     padding: 1rem 1.1rem;

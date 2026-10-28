@@ -154,3 +154,17 @@
   }
   .row-menu button:hover { background: var(--bg); }
   .row-menu button.danger { color: var(--danger); }
+
+  /* ── Shared: "how busy" colors and the month stepper ─────────
+     Used by Ocupación and the Dashboard. */
+  .lvl-none   { --lvl: var(--border);      --tint: transparent; }
+  .lvl-low    { --lvl: var(--accent-dim);  --tint: rgba(74,158,218,.08); }
+  .lvl-ok     { --lvl: var(--accent);      --tint: rgba(74,158,218,.18); }
+  .lvl-high   { --lvl: var(--warn);        --tint: rgba(217,154,78,.18); }
+  .lvl-full   { --lvl: var(--danger);      --tint: rgba(217,105,90,.22); }
+  .lvl-over   { --lvl: var(--danger);      --tint: rgba(217,105,90,.30); }
+  .lvl-closed { --lvl: var(--text-faint);  --tint: rgba(131,141,148,.10); }
+
+  .month-nav { display: flex; gap: .3rem; }
+  .month-nav .btn { width: 32px; padding: 0; font-size: 1.1rem; line-height: 1; background: transparent; border-color: var(--border); color: var(--text-dim); }
+  .month-nav .btn:hover { color: #fff; border-color: var(--accent); background: transparent; }

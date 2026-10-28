@@ -1,4 +1,4 @@
-/* dashboard.css — Manager dashboard. */
+/* dashboard.css — Manager dashboard: period picker, five KPIs, and four charts. */
 /* ── Manager dashboard ────────────────────────────────────── */
 #view-dashboard {
   --dash-bg: #0f1215;
@@ -48,26 +48,25 @@
 
 #view-dashboard .dashboard-period,
 #view-dashboard .panel,
-#view-dashboard .chart-block,
-#view-dashboard .kpi-card {
+#view-dashboard .kpi-card,
+#view-dashboard .dash-chart {
   background: var(--dash-surface);
   border: 1px solid var(--dash-border);
   border-radius: 9px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
 }
 
+/* ── Period picker ─────────────────────────────────────────── */
 #view-dashboard .dashboard-period {
   display: grid;
-  grid-template-columns: repeat(2, minmax(80px, 110px)) auto;
+  grid-template-columns: repeat(2, minmax(80px, 100px)) auto auto;
   align-items: end;
   gap: .65rem;
   margin: 0;
   padding: .65rem .75rem;
 }
 
-#view-dashboard .dashboard-period .field input,
-#view-dashboard .panel .field input,
-#view-dashboard .panel .field select {
+#view-dashboard .dashboard-period .field input {
   background: #0f1215;
   border-color: #3b434a;
   border-radius: 5px;
@@ -75,14 +74,12 @@
   min-width: 0;
 }
 
-#view-dashboard .dashboard-period .field label,
-#view-dashboard .panel .field label {
+#view-dashboard .dashboard-period .field label {
   color: var(--dash-muted);
   font-weight: 600;
 }
 
-#view-dashboard .dashboard-period .btn,
-#view-dashboard .panel .btn {
+#view-dashboard .dashboard-period .btn {
   background: var(--dash-blue);
   border: 1px solid var(--dash-blue);
   border-radius: 5px;
@@ -90,10 +87,22 @@
   white-space: nowrap;
 }
 
-#view-dashboard .dashboard-period .btn:hover,
-#view-dashboard .panel .btn:hover {
-  background: #2d5f80;
+#view-dashboard .dashboard-period .btn:hover { background: #2d5f80; }
+
+#view-dashboard .dashboard-period .month-nav .btn {
+  height: 34px;
+  background: transparent;
+  border-color: #3b434a;
+  color: var(--dash-muted);
 }
+
+#view-dashboard .dashboard-period .month-nav .btn:hover {
+  background: transparent;
+  border-color: var(--dash-blue);
+  color: #fff;
+}
+
+#view-dashboard .dashboard-period .status:empty { display: none; }
 
 #view-dashboard .dashboard-period .status {
   grid-column: 1 / -1;
@@ -104,8 +113,41 @@
 #view-dashboard .status { color: var(--dash-muted); }
 #view-dashboard .status.error { color: var(--dash-red); }
 
-#view-dashboard .dashboard-section { margin-bottom: 1.1rem; }
+/* ── Notes and section headings ────────────────────────────── */
+#view-dashboard .dash-note {
+  margin-bottom: 1.1rem;
+  padding: .7rem .95rem;
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--dash-amber);
+  background: rgba(217, 154, 78, .08);
+  border: 1px solid rgba(217, 154, 78, .3);
+  border-radius: 9px;
+}
 
+#view-dashboard .dashboard-section { margin-bottom: 1.5rem; }
+
+#view-dashboard .dashboard-section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 .7rem;
+}
+
+#view-dashboard .dashboard-section-heading h2 {
+  color: var(--dash-text);
+  font-size: .98rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+#view-dashboard .section-description {
+  color: var(--dash-muted);
+  font-size: .76rem;
+  margin-top: .2rem;
+}
+
+/* ── KPI cards ─────────────────────────────────────────────── */
 #view-dashboard .kpi-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .8rem;
@@ -113,9 +155,11 @@
 }
 
 #view-dashboard .kpi-card {
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid var(--dash-border);
-  min-height: 108px;
-  padding: 1rem 1.05rem;
+  min-height: 138px;
+  padding: 1rem 1.05rem .9rem;
 }
 
 #view-dashboard .kpi-card.warn { border-left: 3px solid #e6a23c; }
@@ -132,7 +176,7 @@
 #view-dashboard .kpi-value {
   color: var(--dash-text);
   font-family: var(--sans);
-  font-size: clamp(1.25rem, 1.8vw, 1.75rem);
+  font-size: clamp(1.3rem, 1.9vw, 1.85rem);
   letter-spacing: -.03em;
   overflow-wrap: anywhere;
 }
@@ -141,78 +185,207 @@
   color: var(--dash-muted);
   font-size: .72rem;
   line-height: 1.4;
+  margin-top: .3rem;
 }
 
-#view-dashboard .highlight { color: var(--dash-green); }
-#view-dashboard .warn-text { color: var(--dash-amber); }
-#view-dashboard .danger-text { color: var(--dash-red); }
-
-#view-dashboard .dashboard-section-heading {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  margin: 0 0 .65rem;
-}
-
-#view-dashboard .dashboard-section-heading h2 {
-  color: var(--dash-text);
-  font-size: .98rem;
-  font-weight: 650;
-  letter-spacing: -.01em;
-}
-
-#view-dashboard .section-description {
+#view-dashboard .kpi-delta {
+  margin-top: auto;
+  padding-top: .6rem;
+  font-size: .72rem;
+  font-weight: 600;
   color: var(--dash-muted);
-  font-size: .76rem;
-  margin-top: .2rem;
 }
+#view-dashboard .kpi-delta.good { color: var(--dash-green); }
+#view-dashboard .kpi-delta.bad { color: var(--dash-red); }
 
-#view-dashboard .dashboard-table-wrap {
-  background: var(--dash-surface);
-  border: 1px solid var(--dash-border);
-  border-radius: 9px;
-  overflow-x: auto;
-}
-
-#view-dashboard table { font-size: .83rem; }
-#view-dashboard th {
-  background: #1d2226;
-  border-bottom-color: var(--dash-border);
-  color: var(--dash-muted);
-  font-size: .7rem;
-  font-weight: 700;
-  padding: .7rem .8rem;
-}
-#view-dashboard td {
-  border-bottom-color: #1e2328;
-  color: #d7dbde;
-  padding: .72rem .8rem;
-}
-#view-dashboard tr:last-child td { border-bottom: 0; }
-#view-dashboard tr:hover td { background: #1d2226; }
-
-#view-dashboard .dashboard-trends { margin-top: 1.5rem; }
-#view-dashboard .dashboard-trends > .panel {
-  padding: .8rem 1rem;
-}
-#view-dashboard .dashboard-chart-grid {
+/* ── Chart cards ───────────────────────────────────────────── */
+#view-dashboard .dash-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .9rem;
 }
-#view-dashboard .chart-block {
-  margin-bottom: 0;
+
+#view-dashboard .dash-chart {
   min-width: 0;
-  padding: .9rem 1rem;
-}
-#view-dashboard .chart-title {
-  color: var(--dash-text);
-  font-size: .82rem;
-  font-weight: 650;
+  padding: 1rem 1.1rem 1.05rem;
 }
 
+#view-dashboard .dash-chart-title {
+  color: var(--dash-text);
+  font-size: .92rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+#view-dashboard .dash-chart-sub {
+  min-height: 2.6em;
+  margin: .25rem 0 .8rem;
+  color: var(--dash-muted);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+#view-dashboard .dash-legend {
+  flex-wrap: wrap;
+  gap: .4rem 1rem;
+  margin-top: .8rem;
+  color: var(--dash-muted);
+}
+
+#view-dashboard .dash-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 170px;
+  padding: 1rem;
+  text-align: center;
+  font-size: .84rem;
+  color: var(--dash-muted);
+  background: rgba(255, 255, 255, .02);
+  border: 1px dashed var(--dash-border);
+  border-radius: 6px;
+}
+#view-dashboard .dash-empty.good { color: var(--dash-green); border-color: rgba(95, 184, 122, .35); }
+
+/* Legend keys */
+#view-dashboard .dash-key { display: inline-block; width: 11px; height: 11px; border-radius: 2px; }
+#view-dashboard .dash-key[class*="lvl-"] { background: var(--lvl); }
+#view-dashboard .dash-key.lvl-over { background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, .3) 0, rgba(0, 0, 0, .3) 3px, transparent 3px, transparent 6px); }
+#view-dashboard .dash-key-line { display: inline-block; width: 2px; height: 13px; background: var(--dash-text); opacity: .7; }
+
+/* Segment colors shared by chart 1 and the keys */
+#view-dashboard .on_time { background: var(--dash-green); }
+#view-dashboard .warning { background: var(--dash-amber); }
+#view-dashboard .critical { background: var(--dash-red); }
+#view-dashboard .unplanned {
+  background-color: #2a3035;
+  background-image: repeating-linear-gradient(135deg, rgba(154, 164, 171, .45) 0, rgba(154, 164, 171, .45) 3px, transparent 3px, transparent 6px);
+}
+#view-dashboard .other { background: #4a535a; }
+
+/* ── Chart 1: deliveries per month ─────────────────────────── */
+#view-dashboard .dash-cols {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: .2rem;
+  height: 214px;
+}
+
+#view-dashboard .dash-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .25rem;
+  height: 100%;
+  padding: .3rem .1rem .3rem;
+  color: var(--dash-muted);
+  font-family: var(--sans);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+#view-dashboard .dash-col:hover { background: rgba(74, 158, 218, .08); }
+#view-dashboard .dash-col:focus-visible { outline: 2px solid var(--dash-blue); outline-offset: 1px; }
+#view-dashboard .dash-col.selected { color: #fff; background: rgba(74, 158, 218, .14); border-color: rgba(74, 158, 218, .55); }
+
+#view-dashboard .dash-col-total { height: 1em; font-family: var(--mono); font-size: .68rem; line-height: 1; }
+#view-dashboard .dash-col-label { font-size: .66rem; }
+#view-dashboard .dash-col-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  width: 68%;
+  max-width: 28px;
+  overflow: hidden;
+  border-radius: 3px 3px 0 0;
+}
+#view-dashboard .dash-seg { display: block; width: 100%; }
+
+/* ── Chart 2: load per team ────────────────────────────────── */
+#view-dashboard .dash-bar-row {
+  display: grid;
+  grid-template-columns: 6.2rem 1fr 3.8rem;
+  gap: .85rem;
+  align-items: center;
+  padding: .7rem 0;
+  border-bottom: 1px solid var(--dash-border);
+}
+#view-dashboard .dash-bar-row:first-child { padding-top: .2rem; }
+#view-dashboard .dash-bar-row:last-child { border-bottom: 0; }
+#view-dashboard .dash-bar-name { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+#view-dashboard .dash-bar-name strong { font-size: .84rem; color: var(--dash-text); }
+#view-dashboard .dash-bar-name small { font-size: .66rem; color: var(--dash-muted); }
+#view-dashboard .dash-bar-track {
+  position: relative;
+  height: 18px;
+  background: #0f1215;
+  border: 1px solid #2a3035;
+  border-radius: 3px;
+}
+#view-dashboard .dash-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--lvl);
+  border-radius: 2px 0 0 2px;
+  animation: dash-grow .6s ease-out;
+}
+#view-dashboard .dash-bar-fill.lvl-over {
+  background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, .28) 0, rgba(0, 0, 0, .28) 5px, transparent 5px, transparent 10px);
+}
+#view-dashboard .dash-bar-limit { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--dash-text); opacity: .7; }
+#view-dashboard .dash-bar-value { font-family: var(--mono); font-size: .86rem; font-weight: 600; text-align: right; color: var(--dash-text); }
+
+/* ── Chart 3: plant occupancy line ─────────────────────────── */
+#view-dashboard .dash-svg { display: block; width: 100%; height: auto; }
+#view-dashboard .dash-grid-line { stroke: var(--dash-border); stroke-width: 1; }
+#view-dashboard .dash-limit-line { stroke: var(--dash-red); stroke-width: 1; stroke-dasharray: 4 3; opacity: .75; }
+#view-dashboard .dash-line { fill: none; stroke: var(--dash-blue); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+#view-dashboard .dash-area { fill: rgba(74, 158, 218, .13); }
+#view-dashboard .dash-dot { fill: var(--dash-blue); stroke: var(--dash-surface); stroke-width: 2; }
+#view-dashboard .dash-dot.sel { fill: #fff; stroke: var(--dash-blue); stroke-width: 2.5; }
+#view-dashboard .dash-band { fill: rgba(74, 158, 218, .1); }
+#view-dashboard .dash-axis { fill: var(--dash-muted); font-family: var(--mono); font-size: 10px; }
+#view-dashboard .dash-axis.sel { fill: #fff; font-weight: 700; }
+#view-dashboard .dash-value-label { fill: #fff; font-family: var(--mono); font-size: 11px; font-weight: 700; stroke: var(--dash-surface); stroke-width: 4px; paint-order: stroke; stroke-linejoin: round; }
+#view-dashboard .dash-hit { fill: transparent; cursor: pointer; }
+#view-dashboard .dash-hit:hover { fill: rgba(74, 158, 218, .07); }
+
+/* ── Chart 4: late orders ──────────────────────────────────── */
+#view-dashboard .dash-late-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(4rem, 1fr) 3.1rem;
+  gap: .8rem;
+  align-items: center;
+  padding: .6rem 0;
+  border-bottom: 1px solid var(--dash-border);
+}
+#view-dashboard .dash-late-row:first-child { padding-top: .1rem; }
+#view-dashboard .dash-late-row:last-child { border-bottom: 0; }
+#view-dashboard .dash-late-name { display: flex; flex-direction: column; gap: .15rem; min-width: 0; font-size: .82rem; }
+#view-dashboard .dash-late-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-dashboard .dash-late-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .64rem; color: var(--dash-muted); }
+#view-dashboard .dash-late-bar { height: 9px; background: #0f1215; border-radius: 2px; overflow: hidden; }
+#view-dashboard .dash-late-bar span { display: block; height: 100%; animation: dash-grow .6s ease-out; }
+#view-dashboard .dash-late-days { font-family: var(--mono); font-size: .84rem; font-weight: 700; text-align: right; background: none; }
+#view-dashboard .dash-late-days.warning { color: var(--dash-amber); }
+#view-dashboard .dash-late-days.critical { color: var(--dash-red); }
+#view-dashboard .dash-more { margin: .5rem 0 0; font-size: .74rem; color: var(--dash-muted); }
+
+@keyframes dash-grow { from { width: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  #view-dashboard .dash-bar-fill, #view-dashboard .dash-late-bar span { animation: none; }
+  #view-dashboard .dash-col { transition: none; }
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 1050px) {
   #view-dashboard .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 980px) {
+  #view-dashboard .dash-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -220,11 +393,11 @@
   #view-dashboard .dashboard-header { flex-direction: column; }
   #view-dashboard .dashboard-period { width: 100%; }
   #view-dashboard .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #view-dashboard .dashboard-chart-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 460px) {
   #view-dashboard .kpi-grid { grid-template-columns: 1fr; }
   #view-dashboard .dashboard-period { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #view-dashboard .dashboard-period .btn { grid-column: 1 / -1; }
+  #view-dashboard .dashboard-period .btn:not(.month-nav .btn) { grid-column: 1 / -1; }
+  #view-dashboard .dash-bar-row { grid-template-columns: 5.5rem 1fr 3.4rem; }
 }
