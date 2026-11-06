@@ -181,3 +181,60 @@ def monthly_requirements(year: int, month: int, db: Session):
         "orders": per_order,
         "errors": errors,
     }
+
+
+def route_summary(db: Session):
+    """
+    What the production route can do as a whole, from the teams' configuration alone.
+
+    Every team loses a share of what it processes, so a team's tons only become
+    finished steel after passing through the teams that come AFTER it. A team's
+    `finished_capacity_week` is its weekly capacity discounted by the efficiencies
+    downstream of it: the most finished product per week that team can support.
+    The team with the smallest figure is the bottleneck, and its figure is the
+    plant's real weekly output. `load_at_full_rate_pct` is how busy every other
+    team would be while the bottleneck runs flat out (the bottleneck itself: 100%).
+    """
+    teams = db.query(models.Team).order_by(models.Team.sequence_order).all()
+    if not teams:
+        return {"teams": [], "bottleneck": None, "finished_capacity_week": None,
+                "finished_capacity_month": None, "overall_yield": None, "raw_per_100_t": None}
+
+    rows = []
+    for index, team in enumerate(teams):
+        downstream = 1.0
+        for later in teams[index + 1:]:
+            downstream *= float(later.efficiency)
+        rows.append({
+            "team_id": team.id,
+            "team_name": team.name,
+            "sequence_order": team.sequence_order,
+            "monthly_capacity": float(team.monthly_capacity),
+            "weeks_available": team.weeks_available,
+            "weekly_capacity": team.weekly_capacity,
+            "efficiency": float(team.efficiency),
+            "holiday_staffing": float(team.holiday_staffing),
+            "finished_capacity_week": team.weekly_capacity * downstream,
+            "finished_capacity_month": float(team.monthly_capacity) * downstream,
+        })
+
+    bottleneck = min(rows, key=lambda r: (r["finished_capacity_week"], r["sequence_order"]))
+    plant_week = bottleneck["finished_capacity_week"]
+    overall = 1.0
+    for team in teams:
+        overall *= float(team.efficiency)
+
+    for row in rows:
+        row["load_at_full_rate_pct"] = round(plant_week / row["finished_capacity_week"] * 100, 1)
+        row["is_bottleneck"] = row["team_id"] == bottleneck["team_id"]
+        row["finished_capacity_week"] = round(row["finished_capacity_week"], 2)
+        row["finished_capacity_month"] = round(row["finished_capacity_month"], 2)
+
+    return {
+        "teams": rows,
+        "bottleneck": {"team_id": bottleneck["team_id"], "team_name": bottleneck["team_name"]},
+        "finished_capacity_week": round(plant_week, 2),
+        "finished_capacity_month": round(bottleneck["finished_capacity_month"], 2),
+        "overall_yield": round(overall, 4),
+        "raw_per_100_t": round(100 / overall, 2),
+    }

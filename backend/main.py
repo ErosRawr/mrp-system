@@ -7,7 +7,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 import models
-from calculations import calculate_material_requirements, monthly_requirements
+from calculations import calculate_material_requirements, monthly_requirements, route_summary
 from database import engine, get_db
 from dashboard import dashboard_summary
 from disruptions import draw_disruptions, DEFAULT_PROBABILITY, DEFAULT_MIN_DROP, DEFAULT_MAX_DROP
@@ -110,6 +110,15 @@ def list_teams(db: Session = Depends(get_db)):
         }
         for t in teams
     ]
+
+
+@app.get("/route")
+def get_route(db: Session = Depends(get_db)):
+    """
+    The production route as a whole: each team with what it can support in finished
+    tons, the bottleneck, the plant's real weekly output, and the route's overall yield.
+    """
+    return route_summary(db)
 
 
 @app.post("/orders")

@@ -110,9 +110,47 @@
       <div>
         <p class="teams-eyebrow">CONFIGURACIÓN DE PLANTA</p>
         <h1>Equipos de producción</h1>
-        <p class="view-desc">Define la ruta de proceso y la capacidad disponible en cada etapa.</p>
+        <p class="view-desc">La ruta de proceso, etapa por etapa: cuánto puede procesar cada equipo, cuánto material descarta y cuál limita a toda la planta.</p>
       </div>
     </header>
+
+    <div id="teamsKpis"></div>
+
+    <section class="teams-route-section" id="teamsRouteSection" aria-labelledby="teamsRouteTitle">
+      <div class="teams-section-heading">
+        <div>
+          <h2 id="teamsRouteTitle">Ruta de producción</h2>
+          <p class="section-description">De la materia prima al producto terminado. Cada etapa descarta una parte del material, y el equipo con menos capacidad útil marca el ritmo de toda la planta.</p>
+        </div>
+      </div>
+      <div class="teams-route" id="teamsRoute"></div>
+    </section>
+
+    <section class="teams-list-section" id="teamsListSection" aria-labelledby="teamsListTitle">
+      <div class="teams-section-heading">
+        <div>
+          <h2 id="teamsListTitle">Configuración por equipo</h2>
+          <p class="section-description">Los valores que usan el cálculo de materiales y la planeación.</p>
+        </div>
+      </div>
+      <div class="teams-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="center">Etapa</th>
+              <th>Equipo</th>
+              <th class="num">Cap. mensual</th>
+              <th class="num">Semanas</th>
+              <th>Capacidad semanal</th>
+              <th class="num">Rendimiento</th>
+              <th>En festivos</th>
+              <th class="num" title="Toneladas de producto terminado por semana que este equipo puede sostener, descontando lo que descartan los equipos que siguen">Terminado/sem.</th>
+            </tr>
+          </thead>
+          <tbody id="teamsBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="panel teams-form-panel" aria-labelledby="teamsFormTitle">
       <div class="teams-section-heading">
@@ -124,58 +162,38 @@
       <div class="teams-form-grid">
         <div class="field">
           <label for="teamName">Nombre del equipo</label>
-          <input id="teamName" />
+          <input id="teamName" placeholder="Ej. Laminación" autocomplete="off" />
+          <small class="field-hint">Así aparece en la ruta y en los demás módulos.</small>
         </div>
         <div class="field">
           <label for="teamSeq">Orden en la ruta</label>
           <input id="teamSeq" type="number" min="1" />
+          <small class="field-hint">1 es la primera etapa; ya hay una propuesta.</small>
         </div>
         <div class="field">
           <label for="teamCap">Capacidad mensual (t)</label>
-          <input id="teamCap" type="number" min="0.01" step="0.01" />
+          <input id="teamCap" type="number" min="0.01" step="0.01" placeholder="Ej. 100000" />
+          <small class="field-hint">Toneladas que produce en un mes normal.</small>
         </div>
         <div class="field">
           <label for="teamWeeks">Semanas disponibles</label>
-          <input id="teamWeeks" type="number" min="1" value="4" />
+          <input id="teamWeeks" type="number" min="1" max="5" value="4" />
+          <small class="field-hint">Entre 1 y 5; reparte la capacidad mensual.</small>
         </div>
         <div class="field">
           <label for="teamEff">Rendimiento esperado</label>
           <input id="teamEff" type="number" min="0.01" max="1" step="0.01" value="0.95" />
+          <small class="field-hint">0.95 = 95%: el resto se descarta.</small>
         </div>
         <div class="field">
           <label for="teamHoliday">Capacidad en festivos (%)</label>
           <input id="teamHoliday" type="number" min="0" max="100" step="5" value="0" />
+          <small class="field-hint">0 = se detiene, 100 = opera normal.</small>
         </div>
         <div class="teams-form-actions">
           <button class="btn" id="btnCreateTeam">Agregar equipo</button>
           <div class="status" id="teamStatus" role="status" aria-live="polite"></div>
         </div>
-      </div>
-    </section>
-
-    <section class="teams-list-section" aria-labelledby="teamsListTitle">
-      <div class="teams-section-heading">
-        <div>
-          <h2 id="teamsListTitle">Ruta de producción</h2>
-          <p class="section-description">Capacidad, disponibilidad y rendimiento configurados por etapa.</p>
-        </div>
-      </div>
-      <div class="teams-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Equipo</th>
-              <th class="num">Etapa</th>
-              <th class="num">Capacidad mensual</th>
-              <th class="num">Semanas disp.</th>
-              <th class="num">Capacidad semanal</th>
-              <th class="num">Rendimiento</th>
-              <th class="num">Capacidad en festivos</th>
-            </tr>
-          </thead>
-          <tbody id="teamsBody"></tbody>
-        </table>
       </div>
     </section>
   </div>
