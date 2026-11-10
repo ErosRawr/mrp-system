@@ -7,6 +7,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 import models
+from capacity import availability_overloads
 from calculations import calculate_material_requirements, monthly_requirements, route_summary
 from database import engine, get_db
 from dashboard import dashboard_summary
@@ -330,6 +331,18 @@ def set_week_exception(
     db.commit()
     db.refresh(entry)
     return entry
+
+
+@app.get("/availability/overloads")
+def get_availability_overloads(year: int = None, db: Session = Depends(get_db)):
+    """
+    Team-weeks where the saved plan holds more work than the team's availability
+    allows (empty after a fresh plan). Shows that a plan is stale after availability
+    changed; POST /planning/replan-all fixes it.
+    """
+    if year is not None:
+        require_year(year)
+    return availability_overloads(db, year)
 
 
 @app.get("/team-week-exceptions")

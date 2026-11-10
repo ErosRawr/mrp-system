@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/availability.css" />
+  <link rel="stylesheet" href="css/exceptions.css" />
   <link rel="stylesheet" href="css/occupancy.css" />
   <link rel="stylesheet" href="css/planning.css" />
   <link rel="stylesheet" href="css/dashboard.css" />
@@ -345,39 +346,132 @@
 
   <!-- DISPONIBILIDAD -->
   <div class="view" id="view-exceptions">
-    <h1>Disponibilidad</h1>
-    <p class="view-desc">Reduce la capacidad de un equipo para una semana específica — mantenimiento, días festivos, etc. Multiplicador 1.0 = capacidad completa, 0.0 = sin disponibilidad.</p>
-
-    <div class="panel">
-      <div class="panel-title">Nueva excepción</div>
-      <div class="form-row">
-        <div class="field"><label>Equipo</label><select id="excTeam"></select></div>
-        <div class="field"><label>Año</label><input id="excYear" type="number" value="2026" /></div>
-        <div class="field"><label>Semana</label><input id="excWeek" type="number" min="1" max="53" /></div>
-        <div class="field"><label>Multiplicador</label><input id="excMultiplier" type="number" step="0.05" min="0" max="1" value="1.0" /></div>
-        <div class="field"><label>Motivo (opcional)</label><input id="excReason" placeholder="Mantenimiento" /></div>
-        <button class="btn" id="btnSetExc">Guardar</button>
+    <header class="avail-header">
+      <div>
+        <p class="avail-eyebrow">CONFIGURACIÓN DE PLANTA</p>
+        <h1>Disponibilidad de equipos</h1>
+        <p class="view-desc">Cuándo puede trabajar cada equipo: festivos, mantenimiento e interrupciones reducen su capacidad semana a semana. La planeación y la ocupación usan estos valores.</p>
       </div>
-      <div class="status" id="excStatus"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Importar días festivos (México)</div>
-      <div class="form-row">
-        <div class="field"><label>Equipo</label><select id="holidayTeam"></select></div>
-        <div class="field"><label>Año</label><input id="holidayYear" type="number" value="2026" /></div>
-        <div class="field"><label>Días laborales/semana</label><input id="holidayWorkDays" type="number" min="1" value="5" /></div>
-        <button class="btn" id="btnImportHolidays">Importar</button>
+      <div class="avail-year" role="group" aria-label="Año">
+        <button class="btn" id="btnAvailPrev" type="button" aria-label="Año anterior" title="Año anterior">‹</button>
+        <div class="field">
+          <label for="availYear">Año</label>
+          <input id="availYear" type="number" min="1970" max="2200" value="2026" />
+        </div>
+        <button class="btn" id="btnAvailNext" type="button" aria-label="Año siguiente" title="Año siguiente">›</button>
       </div>
-      <div class="status" id="holidayStatus"></div>
-    </div>
+    </header>
 
-    <table>
-      <thead>
-        <tr><th>ID</th><th class="num">Equipo</th><th class="num">Año</th><th class="num">Semana</th><th class="num">Mult.</th><th>Motivo</th><th></th></tr>
-      </thead>
-      <tbody id="excBody"></tbody>
-    </table>
+    <div id="availKpis"></div>
+    <div id="availBanner"></div>
+
+    <section class="avail-section" aria-labelledby="availMapTitle">
+      <div class="avail-section-heading">
+        <h2 id="availMapTitle">Mapa del año</h2>
+        <p class="section-description">Cada columna es una semana. Haz clic en una para editarla o agregar una excepción.</p>
+      </div>
+      <div class="avail-card" id="availMap"></div>
+    </section>
+
+    <section class="avail-section" aria-labelledby="availToolsTitle" id="availTools">
+      <div class="avail-section-heading">
+        <h2 id="availToolsTitle">Registrar cambios de disponibilidad</h2>
+      </div>
+      <div class="avail-card">
+        <div class="avail-tabs" role="tablist" aria-label="Tipo de cambio">
+          <button type="button" role="tab" class="avail-tab active" data-avail-tab="manual" aria-selected="true">Excepción manual</button>
+          <button type="button" role="tab" class="avail-tab" data-avail-tab="holidays" aria-selected="false">Festivos de México</button>
+          <button type="button" role="tab" class="avail-tab" data-avail-tab="disruptions" aria-selected="false">Interrupciones aleatorias</button>
+        </div>
+
+        <div class="avail-panel" data-avail-panel="manual" role="tabpanel">
+          <p class="avail-help">Reduce la capacidad de un equipo en una semana concreta. Si esa semana ya tiene una excepción, se reemplaza.</p>
+          <div class="avail-form">
+            <div class="field"><label for="excTeam">Equipo</label><select id="excTeam"></select></div>
+            <div class="field">
+              <label for="excWeek">Semana</label>
+              <input id="excWeek" type="number" min="1" max="53" placeholder="Ej. 37" />
+              <small class="field-hint" id="excWeekHint">Número de semana ISO del año.</small>
+            </div>
+            <div class="field">
+              <label for="excPct">Capacidad disponible (%)</label>
+              <input id="excPct" type="number" min="0" max="100" step="5" value="80" />
+              <div class="avail-presets" role="group" aria-label="Valores rápidos">
+                <button type="button" class="avail-preset" data-pct="0">Cerrado</button>
+                <button type="button" class="avail-preset" data-pct="50">Mitad</button>
+                <button type="button" class="avail-preset" data-pct="80">80%</button>
+              </div>
+            </div>
+            <div class="field"><label for="excReason">Motivo (opcional)</label><input id="excReason" placeholder="Ej. Mantenimiento" autocomplete="off" /></div>
+            <div class="avail-actions">
+              <button class="btn" id="btnSetExc" type="button">Guardar excepción</button>
+              <div class="status" id="excStatus" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="avail-panel" data-avail-panel="holidays" role="tabpanel" hidden>
+          <p class="avail-help">Agrega los días festivos oficiales del año seleccionado. Cuánto reducen la capacidad depende de lo que el equipo siga operando en festivos (se configura en Equipos). Importar dos veces no duplica nada.</p>
+          <div class="avail-form">
+            <div class="field"><label for="holidayTeam">Equipo</label><select id="holidayTeam"></select></div>
+            <div class="field">
+              <label for="holidayWorkDays">Días laborales por semana</label>
+              <input id="holidayWorkDays" type="number" min="1" max="7" value="5" />
+            </div>
+            <p class="avail-note" id="holidayHint"></p>
+            <div class="avail-actions">
+              <button class="btn" id="btnImportHolidays" type="button">Importar festivos</button>
+              <div class="status" id="holidayStatus" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="avail-panel" data-avail-panel="disruptions" role="tabpanel" hidden>
+          <p class="avail-help">Simula bajas de productividad: cada equipo tiene cierta probabilidad de sufrir una en cada semana del año. Con la misma semilla siempre salen las mismas semanas, y se guardan como excepciones normales.</p>
+          <div class="avail-form">
+            <div class="field"><label for="distTeam">Equipo</label><select id="distTeam"></select></div>
+            <div class="field"><label for="distProb">Probabilidad por semana (%)</label><input id="distProb" type="number" min="0" max="100" step="1" value="10" /></div>
+            <div class="field"><label for="distMin">Baja mínima (%)</label><input id="distMin" type="number" min="1" max="100" step="1" value="10" /></div>
+            <div class="field"><label for="distMax">Baja máxima (%)</label><input id="distMax" type="number" min="1" max="100" step="1" value="40" /></div>
+            <div class="field">
+              <label for="distSeed">Semilla (opcional)</label>
+              <input id="distSeed" type="number" step="1" placeholder="Ej. 10" />
+              <small class="field-hint">Repite exactamente el mismo sorteo.</small>
+            </div>
+            <div class="avail-actions">
+              <button class="btn" id="btnGenerateDisruptions" type="button">Generar interrupciones</button>
+              <div class="status" id="distStatus" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="avail-section" aria-labelledby="availListTitle">
+      <div class="avail-section-heading">
+        <h2 id="availListTitle">Excepciones registradas</h2>
+        <p class="section-description" id="availListCount"></p>
+      </div>
+      <div class="avail-filters">
+        <div class="field"><label for="availTeamFilter">Equipo</label><select id="availTeamFilter"></select></div>
+        <div class="field avail-search"><label for="availSearch">Buscar por motivo</label><input id="availSearch" placeholder="Ej. festivo, mantenimiento…" autocomplete="off" /></div>
+      </div>
+      <div class="avail-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Equipo</th>
+              <th>Semana</th>
+              <th>Capacidad disponible</th>
+              <th>Motivo</th>
+              <th><span class="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody id="excBody"></tbody>
+        </table>
+      </div>
+      <div class="avail-more"><button class="btn" id="btnAvailMore" type="button" hidden>Mostrar más</button></div>
+    </section>
   </div>
 
   <!-- CALENDARIO -->

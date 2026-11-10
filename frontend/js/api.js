@@ -122,3 +122,13 @@ function weekRangeLabel(year, week) {
   const monday = isoWeekMonday(year, week);
   return `${shortDate(monday)} – ${shortDate(monday + 6 * 86400000)}`;
 }
+
+/* The API answers 400: {"detail": "..."}; show just the sentence. */
+function apiErrorText(error) {
+  const match = String(error.message).match(/^\d+: ([\s\S]*)$/);
+  try {
+    const detail = JSON.parse(match[1]).detail;
+    if (typeof detail === "string") return detail;
+  } catch (_) { /* not JSON: fall through */ }
+  return error.message;
+}

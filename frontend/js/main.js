@@ -15,11 +15,7 @@ async function refresh(view) {
     if (view === "dashboard") await loadDashboard();
     if (view === "teams") await loadTeams();
     if (view === "orders") { await populateTeamDropdown("orderTeam"); await loadOrders(); }
-    if (view === "exceptions") {
-      await populateTeamDropdown("excTeam");
-      await populateTeamDropdown("holidayTeam");
-      await loadExceptions();
-    }
+    if (view === "exceptions") await loadExceptions();
     if (view === "calendar") { await populateTeamDropdown("calTeam"); await loadCalendar(); }
     if (view === "requirements") await refreshRequirements();
     if (view === "planning") await loadPlanMonth();
