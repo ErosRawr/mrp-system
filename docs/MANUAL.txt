@@ -1,0 +1,833 @@
+﻿MANUAL DE USUARIO — MRP RUTA DE PROCESO
+=======================================
+
+Este manual explica cómo iniciar y usar el sistema de planeación para una planta acerera. Está escrito para que cualquier persona pueda seguirlo sin ayuda: cada paso dice qué hacer y qué debe aparecer en pantalla antes de continuar.
+
+Cómo leer este manual
+
+- Haz los pasos en orden. Cada sección depende de la anterior.
+- Debe verse: lo que deberías observar después de un paso. Si no lo ves, revisa la sección 7. Solución de problemas antes de seguir.
+- Los nombres de botones, campos y pestañas están escritos exactamente como aparecen en la pantalla.
+- Los textos entre corchetes, como [CAPTURA …], son espacios para las imágenes que faltan.
+
+ÍNDICE
+======
+
+1. Cómo iniciar el sistema
+2. Qué hace el sistema
+3. Glosario
+4. Recorrido por las pestañas
+5. Ejemplo completo: de cero a un plan
+6. Demostración: septiembre 2026
+7. Solución de problemas
+8. Cómo se calcula
+9. Límites conocidos
+10. Lista de capturas pendientes
+
+1. CÓMO INICIAR EL SISTEMA
+==========================
+
+Antes de esta sección, el sistema debe estar instalado. Las instrucciones de instalación están en el archivo README.md de la carpeta del proyecto.
+
+1.1 Iniciar el sistema
+----------------------
+
+El sistema tiene dos partes que deben estar corriendo al mismo tiempo: el servidor (que hace los cálculos) y las páginas (lo que ves en el navegador). Cada una va en su propia ventana de terminal.
+
+Ventana 1: el servidor.
+Abre la carpeta mrp-system y haz doble clic en run.bat.
+
+   📸 [CAPTURA 1.1a — Ventana de run.bat con el servidor iniciado]
+   Debe verse: una línea que dice Uvicorn running on http://127.0.0.1:8000. Deja esta ventana abierta mientras uses el sistema.
+
+Si se cierra al instante o muestra un error: abre la terminal como en el paso 2 de la sección anterior, activa el entorno (venv\Scripts\activate) y escribe uvicorn main:app --app-dir backend --reload. El mensaje de error que aparezca te dirá qué falta.
+
+Ventana 2: las páginas.
+Haz doble clic en run_frontend.bat, también dentro de mrp-system.
+
+   📸 [CAPTURA 1.1b — Ventana de run_frontend.bat con el servidor de páginas]
+   Debe verse: una línea que dice Serving HTTP on ... port 5500.
+
+Ventana 3: el navegador.
+Abre Chrome o Edge y escribe en la barra de direcciones:
+
+    http://localhost:5500
+
+   📸 [CAPTURA 1.1c — Pantalla principal del sistema (Dashboard)]
+   Debe verse: a la izquierda, el menú con las ocho pestañas (Dashboard, Equipos, Pedidos, Disponibilidad, Calendario, Requerimientos, Planeación Mensual, Ocupación). A la derecha, el título Resumen de producción.
+
+1.2 Comprobar que todo funciona
+-------------------------------
+
+Antes de seguir, confirma que el servidor responde. En el navegador, abre:
+
+    http://localhost:8000/health
+
+   📸 [CAPTURA 1.2 — Navegador mostrando {"status":"ok"}]
+   Debe verse: exactamente el texto {"status":"ok"}.
+
+Luego abre también:
+
+    http://localhost:8000/docs
+
+   📸 [CAPTURA 1.2b — Página de documentación del servidor (/docs)]
+   Debe verse: una lista de direcciones que empiezan por /teams, /orders, /dashboard, /planning/…. Si no aparece /dashboard, lee la sección 7 antes de seguir.
+
+Si health no responde: la ventana 1 no está corriendo. Vuelve a abrir run.bat.
+
+1.3 Cargar los datos de demostración (recomendado)
+--------------------------------------------------
+
+Los datos de demostración crean una planta de cuatro equipos, 168 pedidos de 2026 y los planes de casi todo el año. Septiembre queda sin planear a propósito, para que lo compares tú. Úsalos para aprender el sistema y para la sección 6.
+
+Hazlo solo una vez, con una base de datos nueva. Si ya tienes datos que quieres conservar, sáltate esta sección.
+
+1. Cierra la ventana 1 (el servidor) con Ctrl+C y confirma con S si te lo pide.
+2. Borra el archivo mrp.db de la carpeta mrp-system, si existe.
+3. Vuelve a abrir run.bat y espera a que diga Uvicorn running.
+4. En la ventana 2 o en otra terminal dentro de mrp-system con el entorno activo, ejecuta:
+
+    python scripts/seed_data.py
+
+   📸 [CAPTURA 1.3 — Terminal con la salida del script de datos]
+   Debe verse: líneas como Equipo creado: Equipo 1, y al final mensajes de planeación de cada mes. No debe aparecer la palabra FAILED.
+   Si aparece FAILED: casi siempre significa que el servidor no estaba corriendo o que mrp.db ya tenía datos. Repite desde el paso 1.
+
+5. Recarga la página del navegador con Ctrl+F5 y entra a la pestaña Dashboard.
+
+   📸 [CAPTURA 1.3b — Dashboard con los datos de demostración cargados]
+   Debe verse: el título Indicadores de diciembre de 2026 (el sistema abre en el último mes planeado). Las cinco tarjetas muestran números, no guiones.
+
+2. QUÉ HACE EL SISTEMA
+======================
+
+El sistema responde una pregunta: ¿cuándo puede entregar la planta cada pedido, considerando la capacidad de cada equipo y los días que no trabaja?
+
+El flujo de trabajo es este:
+
+     Equipos ──► Disponibilidad ──► Pedidos ──► Requerimientos ──► Planeación Mensual ──► Dashboard
+     (cuánto puede     (cuándo no puede    (qué se pide)  (cuánto material       (fecha de entrega     (indicadores
+      hacer cada        trabajar cada                     se necesita)          de cada pedido)       para el mes)
+      equipo)           equipo)
+                                                                      │
+                                                  Ocupación y Calendario ◄┘ (cómo se usa la capacidad)
+
+En palabras simples:
+
+1. Equipos: defines la ruta de producción, de la materia prima al producto terminado.
+2. Disponibilidad: indicas los festivos, mantenimientos y paros que reducen la capacidad.
+3. Pedidos: registras lo que pide cada cliente.
+4. Requerimientos: el sistema calcula cuánta materia prima se necesita y cuánto se descarta.
+5. Planeación Mensual: el sistema asigna capacidad a cada pedido y calcula su fecha de entrega. Puedes comparar criterios o ordenar los pedidos a mano.
+6. Dashboard, Ocupación y Calendario: muestran el resultado para tomar decisiones.
+
+3. GLOSARIO
+===========
+
+   Término — Qué significa
+   --- — ---
+   Equipo — Una etapa de la ruta de producción (por ejemplo, Laminación).
+   Orden en la ruta — El número de etapa de un equipo. El 1 es el primero por el que pasa el material.
+   Capacidad mensual (t) — Toneladas que el equipo puede producir en un mes normal.
+   Semanas disponibles — En cuántas semanas del mes se reparte la capacidad mensual (de 1 a 5).
+   Capacidad semanal — Capacidad mensual dividida entre las semanas disponibles.
+   Rendimiento — Porcentaje del material que sale bien del equipo. Con 95%, de cada 100 t que entran salen 95 t; las 5 t restantes son merma.
+   Merma — Material que el equipo descarta en el proceso.
+   Capacidad en festivos — Qué porcentaje de su trabajo normal sigue haciendo el equipo en un día festivo: 0% se detiene, 100% opera normal.
+   Semana ISO — La forma en que el sistema numera las semanas del año (la semana 1 es la que contiene el 4 de enero). Algunos años tienen 53 semanas.
+   Disponibilidad (excepción) — Un cambio en la capacidad de un equipo en una semana: festivo, mantenimiento, paro o baja de productividad.
+   Festivo — Día feriado oficial de México. El sistema puede importarlos automáticamente.
+   Interrupción — Una baja de productividad al azar, con una semilla para que siempre salga igual.
+   Pedido — Lo que pide un cliente: cantidad, equipo por el que entra, fechas y prioridad.
+   Tonelaje — Cantidad pedida, en toneladas de producto terminado.
+   Fecha solicitada — La fecha de entrega que pidió el cliente.
+   Fecha calculada — La fecha de entrega que calcula el sistema. Siempre es un domingo (fin de la semana en que se termina el pedido).
+   Prioritario — Pedido que el usuario marca como urgente. Algunos criterios de planeación lo adelantan.
+   Tipo de pedido — Categoría del producto (comercial, galvanizado, perfiles, perfileros, tubería, ojalatero, especial).
+   Planeación — Asignar capacidad a los pedidos de un mes para calcular su fecha de entrega.
+   Criterio — Regla para ordenar los pedidos antes de asignar capacidad: PEPS, Prioritario o Heurística.
+   PEPS (FIFO) — Primero en entrar, primero en salir: se atiende primero el pedido con fecha solicitada más temprana.
+   Prioritario — Primero los pedidos marcados como prioritarios, y después por fecha solicitada.
+   Heurística — Prioritarios primero, después pedidos de 15,000 t o más (los más grandes primero), después por tipo de pedido, y por último por fecha.
+   Secuencia manual — Orden que tú decides arrastrando los pedidos, en vez de usar un criterio.
+   Expedite — Bloque de la secuencia manual para los pedidos urgentes.
+   Estándar — Bloque de la secuencia manual para los pedidos normales.
+   Hold — Bloque de pedidos que se excluyen del plan.
+   Atrasado / Crítico — Un pedido llega tarde (ver sección 8).
+   Cuello de botella — El equipo con menos capacidad útil. Limita a toda la planta.
+   Ocupación — Porcentaje de la capacidad de una semana que ya está comprometido con pedidos.
+   Plan guardado — Resultado de una planeación que ya fue guardada.
+   Replanificar — Volver a calcular las fechas de los meses guardados, después de un cambio.
+   Ocupación de planta — Promedio de la ocupación de todos los equipos.
+
+4. RECORRIDO POR LAS PESTAÑAS
+=============================
+
+Las pestañas aparecen en el menú de la izquierda, en este orden. Puedes visitarlas en cualquier momento; cada una se actualiza al abrirla.
+
+Para cada pestaña encontrarás: para qué sirve, qué hacer, qué debe aparecer, y errores comunes.
+
+4.1 Dashboard
+-------------
+
+Para qué sirve: dar un resumen de un mes: cuántos pedidos hay, qué porcentaje llega a tiempo, qué tan cargada está la planta y qué pedidos necesitan atención.
+
+Qué hacer:
+
+1. Al abrir la pestaña, el sistema elige solo el último mes planeado y lo muestra. No necesitas hacer nada.
+2. Para cambiar de mes, escribe el Año y el Mes y pulsa Actualizar, o usa las flechas ‹ y › junto a los campos.
+3. Para ver un mes en particular, haz clic en su columna en la gráfica ¿Cumplimos con las entregas?.
+
+   📸 [CAPTURA 4.1a — Dashboard completo con un mes planeado]
+   Debe verse: el título Indicadores de [mes] de 2026 y, debajo, cinco tarjetas: Pedidos del mes, Entregas a tiempo, Ocupación de planta, Cuello de botella y Tonelaje pedido. Abajo, cuatro gráficas con títulos en forma de pregunta.
+
+Qué significa cada tarjeta:
+
+- Pedidos del mes: cuántos pedidos pertenecen a ese mes, cuántos ya tienen fecha calculada y cuántos no.
+- Entregas a tiempo: porcentaje de los pedidos planeados que llegan a tiempo. Verde si es 90% o más, ámbar entre 75% y 90%, rojo menos de 75%.
+- Ocupación de planta: promedio de la ocupación de todos los equipos en las semanas del mes.
+- Cuello de botella: el equipo más cargado, con su porcentaje.
+- Tonelaje pedido: toneladas pedidas, con la materia prima que requieren y el rendimiento.
+
+Bajo cada cifra aparece una flecha con el cambio frente al mes anterior: ▲ sube y ▼ baja. El color indica si el cambio es bueno (verde) o malo (rojo) cuando eso está definido.
+
+Las cuatro gráficas:
+
+   Gráfica — Qué muestra — Cómo leerla
+   --- — --- — ---
+   ¿Cumplimos con las entregas? — Doce columnas, una por mes — Verde = a tiempo, ámbar = atrasado, rojo = crítico, rayado = sin planear. El número arriba es el total de pedidos.
+   ¿Qué tan cargado está cada equipo? — Una barra por equipo — La línea blanca es el 100% de su capacidad. Azul oscuro = baja (menos de 50%), azul = normal (50% a 85%), ámbar = alta (85% a 100%), rojo = excedida (más de 100%).
+   ¿Cómo evoluciona la carga de la planta? — Línea de doce meses — Los meses sin carga planeada quedan en blanco, no como 0%.
+   ¿Qué pedidos necesitan atención? — Los cinco pedidos atrasados más urgentes — Cuántos días después de lo solicitado llegará cada uno.
+
+   📸 [CAPTURA 4.1b — Gráfica ¿Cumplimos con las entregas? con un mes seleccionado]
+   Debe verse: la columna del mes elegido resaltada con un borde azul.
+
+Errores comunes:
+
+- Ver "— / —" en Entregas a tiempo: el mes no está planeado. Ve a Planeación Mensual y ejecuta la planeación de ese mes (sección 4.7).
+- Aparece una nota ámbar que dice que el mes no está planeado: es correcto. Los indicadores de entrega aparecerán cuando guardes un plan.
+- Esperar que el mes de septiembre se abra solo: el sistema abre siempre el último mes planeado. Si septiembre no está planeado, haz clic en su columna.
+
+4.2 Equipos
+-----------
+
+Para qué sirve: definir las etapas de la ruta de producción. Sin equipos, el sistema no puede calcular nada.
+
+Antes de empezar: piensa en el orden real del proceso, de la materia prima al producto terminado. El número 1 es la primera etapa.
+
+Qué hacer:
+
+1. En el formulario Agregar equipo, llena los campos:
+
+   Campo — Qué escribir — Ejemplo
+   --- — --- — ---
+   Nombre del equipo — Cómo se llama la etapa. Se muestra en todo el sistema. — Laminación
+   Orden en la ruta — El número de etapa. Ya viene propuesto el siguiente. — 1
+   Capacidad mensual (t) — Toneladas que produce en un mes normal. Mayor que 0. — 260000
+   Semanas disponibles — En cuántas semanas se reparte la capacidad (1 a 5). Viene 4. — 4
+   Rendimiento esperado — Porcentaje que sale bien. Escribe 0.98 para 98%. — 0.98
+   Capacidad en festivos (%) — 0 si el equipo se detiene en festivos, 100 si opera normal. — 100
+
+2. Pulsa Agregar equipo.
+
+   📸 [CAPTURA 4.2a — Formulario Agregar equipo con datos de ejemplo]
+
+Debe verse: el mensaje Equipo agregado. seguido de una advertencia de que los planes ya guardados deben replanificarse. La tabla y la ruta se actualizan de inmediato.
+
+Lo que debes revisar en la pantalla:
+
+- Tarjetas de resumen: cuántas etapas hay, la capacidad real de la planta (en toneladas de producto terminado por semana), el cuello de botella y el rendimiento global.
+- Ruta de producción: una tarjeta por equipo, con flechas que indican el sentido del proceso. El equipo que limita a la planta aparece con borde ámbar y la etiqueta Cuello de botella.
+- Uso a ritmo máximo: cuánto trabajaría cada equipo si el cuello de botella trabajara a toda su capacidad. El cuello de botella siempre marca 100%.
+
+   📸 [CAPTURA 4.2b — Ruta de producción con cuatro equipos]
+   Debe verse: cuatro tarjetas en orden, con la etiqueta Cuello de botella en la última (Equipo 4 en los datos de demostración).
+
+Errores comunes:
+
+- sequence_order 3 is already used by team 'Equipo 3': cada número de orden solo puede usarse una vez. Revisa la tabla Configuración por equipo.
+- a team named 'Laminación' already exists: los nombres no distinguen mayúsculas. laminación y Laminación son el mismo.
+- Escribir 95 en Rendimiento esperado: el campo espera una fracción. Escribe 0.95.
+- Escribir < > en el nombre: no se permiten. El mensaje aparece en inglés: name cannot contain < or >.
+- Querer corregir un equipo después: hoy no se puede editar ni eliminar desde la pantalla. Ver la sección 9.
+
+4.3 Pedidos
+-----------
+
+Para qué sirve: registrar lo que pide cada cliente.
+
+Antes de empezar: ten listo el equipo por el que entra el pedido (normalmente el último de la ruta, si el cliente pide producto terminado).
+
+Cómo crear un pedido:
+
+1. En el formulario superior, llena los campos:
+
+   Campo — Obligatorio — Qué escribir
+   --- — --- — ---
+   Cliente — Sí — Nombre del cliente.
+   Tonelaje (t) — Sí — Cantidad pedida, mayor que 0.
+   Equipo de entrada — Sí — El equipo por el que entra el pedido.
+   Fecha de pedido — Sí — Cuándo se registró el pedido.
+   Fecha solicitada — No — Cuándo quiere el cliente el producto. Sin esta fecha, el pedido no se puede clasificar como atrasado.
+   Tipo de pedido — No — Categoría del producto.
+   Marcar como prioritario — No — Marca la casilla si el pedido es urgente.
+
+2. Pulsa Crear pedido.
+
+   📸 [CAPTURA 4.3a — Formulario de Pedidos con todos los campos llenos]
+
+Debe verse: el pedido aparece en la tabla, con su número de ID y el periodo (año-mes) al que pertenece.
+
+Cómo editar o eliminar un pedido:
+
+1. En la fila del pedido, pulsa el botón ⋯.
+2. Elige Editar o Eliminar.
+3. Si eliges Editar, el formulario de arriba se llena con los datos, el título cambia a Editando pedido #… y el botón cambia a Guardar cambios. Para salir sin guardar, pulsa Cancelar.
+
+   📸 [CAPTURA 4.3b — Pedido en modo edición, con el botón Guardar cambios]
+
+Importante: si editas un pedido que ya estaba planeado, su fecha calculada se borra. Hay que volver a ejecutar la planeación de ese mes.
+
+Cómo leer la tabla:
+
+- Filtros: Año, Mes, Buscar cliente, Tipo, Estado y la casilla Solo prioritarios. Los filtros se aplican al escribir o al cambiar la selección.
+- Ordenar: haz clic en el encabezado de una columna para ordenar. Un segundo clic invierte el orden. Aparece una flecha ▲ o ▼ junto al nombre.
+- Páginas: la flecha ‹ y › cambian de página. Hay 25 pedidos por página.
+- Resumen: la línea arriba de la tabla dice cuántos pedidos hay, cuántas toneladas suman y cuántos están atrasados.
+
+Estados que puedes ver en la columna Estado:
+
+   --- — ---
+   Sin planear — Aún no tiene fecha calculada.
+   🟢 A tiempo — Llega dentro de la tolerancia (ver sección 8).
+   🟡 Atrasado +N d — Llega N días después de lo solicitado, entre 8 y 14 días tarde.
+   🔴 Crítico +N d — Llega más de 14 días tarde.
+
+   📸 [CAPTURA 4.3c — Tabla de Pedidos con filtros y estados visibles]
+
+Errores comunes:
+
+- requested_delivery_date cannot be before order_date: la fecha solicitada es anterior a la fecha de pedido. Revisa las dos fechas.
+- quantity_requested must be greater than 0: escribe la cantidad sin el signo de menos y mayor que cero.
+- No team exists with id …: elige el equipo de la lista desplegable; no escribas el número a mano.
+- La tabla dice "Sin planear" en todos los pedidos: es normal después de registrarlos. Falta planearlos (sección 4.7).
+
+4.4 Disponibilidad
+------------------
+
+Para qué sirve: indicar cuándo cada equipo no puede trabajar al cien por ciento: festivos, mantenimientos, paros o bajas de productividad. La planeación y la ocupación usan estos datos.
+
+Antes de empezar: elige el Año con los campos ‹ Año › arriba a la derecha. Todo en la pestaña se refiere a ese año.
+
+Cómo leer la pantalla:
+
+1. Tarjetas de resumen:
+   - Semanas con capacidad reducida: cuántas semanas-equipo tienen menos del 100%.
+   - Semanas cerradas: equipos que no trabajan del todo en alguna semana.
+   - Capacidad perdida: promedio de capacidad que se pierde en el año.
+   - Plan fuera de disponibilidad: semanas-equipo en las que el plan guardado ya tiene más trabajo del que el equipo puede hacer. Si es mayor que cero, ver el paso de replanificar más abajo.
+2. Mapa del año: una fila por equipo y una columna por semana. Pasa el cursor sobre una celda para ver su detalle. Haz clic en una celda para cargarla en el formulario.
+
+   📸 [CAPTURA 4.4a — Mapa del año con celdas ámbar, cerradas y una semana fuera de límite]
+   Debe verse: celdas claras para capacidad completa, ámbar para reducida (más intenso = más pérdida), rayadas en rojo para cerradas, y un borde rojo en las semanas donde el plan ya no cabe.
+
+Cómo registrar un cambio manual:
+
+1. Haz clic en la celda del equipo y semana, o elige el equipo y escribe el número de semana en el formulario Excepción manual.
+2. Escribe Capacidad disponible (%). Puedes usar los botones Cerrado (0%), Mitad (50%) o 80%.
+3. Opcionalmente escribe un Motivo, por ejemplo Mantenimiento de horno.
+4. Pulsa Guardar excepción.
+
+   📸 [CAPTURA 4.4b — Formulario de Excepción manual con datos de ejemplo]
+
+Debe verse: el mensaje Excepción guardada: semana 39 al 20%. La celda del mapa cambia de color y la fila aparece en la lista.
+
+Cómo importar festivos:
+
+1. Pestaña Festivos de México.
+2. Elige el equipo y escribe los Días laborales por semana (normalmente 5).
+3. Pulsa Importar festivos.
+
+El texto debajo de los campos te dice cuánto le quita un festivo a ese equipo. Si el equipo opera normal en festivos, el sistema no registra nada.
+
+Debe verse: un mensaje como 7 semanas festivas importadas. Si lo vuelves a pulsar, dice Sin cambios: importar dos veces no duplica nada.
+
+Cómo generar interrupciones aleatorias:
+
+1. Pestaña Interrupciones aleatorias.
+2. Ajusta Probabilidad por semana (%), Baja mínima (%) y Baja máxima (%).
+3. Opcional: escribe una Semilla (por ejemplo 10). Con la misma semilla siempre salen las mismas semanas.
+4. Pulsa Generar interrupciones.
+
+Debe verse: un mensaje como 21 semanas-equipo afectadas. Si repites la misma semilla, dice Sin cambios.
+
+   📸 [CAPTURA 4.4c — Pestaña Interrupciones aleatorias con mensaje de resultado]
+
+Cuando el plan ya no cabe: replanificar.
+
+Cuando cambias la disponibilidad, los planes guardados no se actualizan solos. Aparece un aviso ámbar:
+
+   El plan guardado tiene N semanas-equipo con más carga de la que permite la disponibilidad actual…
+
+1. Pulsa Replanificar todo.
+
+   📸 [CAPTURA 4.4d — Aviso ámbar con el botón Replanificar todo]
+
+Debe verse: el aviso verde Listo: N meses replanificados…, la tarjeta Plan fuera de disponibilidad vuelve a 0 y las celdas con borde rojo desaparecen.
+
+Cómo editar o eliminar una excepción:
+
+En la lista Excepciones registradas, cada fila tiene Editar (carga los valores en el formulario) y Eliminar (la borra de inmediato, sin pedir confirmación).
+
+Cómo usar la lista:
+
+- Equipo: muestra solo las excepciones de un equipo.
+- Buscar por motivo: escribe una palabra, por ejemplo festivo; no distingue mayúsculas.
+- Mostrar más: muestra 20 filas más cada vez.
+
+Errores comunes:
+
+- "Indica una semana entre 1 y 53": el número de semana depende del año. 2026 tiene 53 semanas; 2027 tiene 52.
+- "La capacidad disponible va de 0% (cerrado) a 100%": escribe el porcentaje, no una fracción. 80 es 80%.
+- Guardar una excepción en una semana que ya tenía una: se reemplaza. Es intencional.
+- La lista dice "No hay excepciones registradas": revisa el Año de arriba.
+
+4.5 Calendario
+--------------
+
+Para qué sirve: ver de un vistazo cómo está disponible un equipo durante todo el año, semana por semana.
+
+Qué hacer:
+
+1. Elige un Equipo y un Año.
+2. Pulsa Ver. También se actualiza solo al cambiar el equipo o el año.
+
+   📸 [CAPTURA 4.5 — Calendario de un equipo con excepciones]
+
+Debe verse:
+
+- Tarjetas: semanas en el año, semanas a capacidad completa, con capacidad reducida, sin disponibilidad y el promedio.
+- Doce bloques, uno por mes. Cada semana muestra su número (S1, S2…), sus fechas y su porcentaje. Un borde azul marca la semana actual.
+- Lista de semanas con capacidad reducida, con el motivo de cada una.
+
+Cómo leer los colores: verde para completa, ámbar para reducida, rojo rayado para sin disponibilidad.
+
+Errores comunes:
+
+- No aparece nada: elige un equipo; el campo Equipo viene vacío al inicio si no hay equipos todavía.
+- Año fuera de rango: solo se aceptan años entre 1970 y 2200.
+
+4.6 Requerimientos
+------------------
+
+Para qué sirve: saber cuánta materia prima hace falta para cumplir uno o varios pedidos, y cuánto acero se pierde en cada etapa. No considera fechas ni capacidad; eso lo hace la planeación.
+
+Qué hacer:
+
+1. Elige el Año y el Mes.
+2. En Pedido, elige Todo el mes para ver el total, o un pedido específico.
+3. Pulsa Calcular. También se actualiza al cambiar el año, el mes o el pedido.
+
+   📸 [CAPTURA 4.6a — Requerimientos con Todo el mes seleccionado]
+
+Debe verse:
+
+- Tarjetas: número de pedidos, producto terminado, materia prima requerida, merma total y rendimiento global.
+- Carga del mes por equipo: una barra por equipo que compara las toneladas que tendría que producir contra su capacidad mensual. Si la barra se pone roja, el equipo está por encima de su capacidad.
+- Tabla de pedidos del mes. Haz clic en una fila para ver el recorrido de ese pedido.
+
+Ver un pedido en detalle:
+
+Al elegir un pedido, aparece el recorrido del material: una barra por equipo, en orden de proceso. La parte que sale del equipo se ve en azul; la merma, rayada en rojo. Debajo, una tabla con las toneladas que entran y salen de cada equipo.
+
+   📸 [CAPTURA 4.6b — Recorrido del material de un pedido]
+   Debe verse: cuatro barras, la primera completa, y cada barra más corta que la anterior.
+
+Para volver al resumen del mes, pulsa ← Todo el mes.
+
+Errores comunes:
+
+- Mensaje "No hay pedidos en 2026-11": ese mes no tiene pedidos. Es correcto.
+- Una barra de carga en rojo: el equipo tendría que producir más de lo que su capacidad mensual permite. Revisa la capacidad del equipo en Equipos o reduce los pedidos del mes.
+
+4.7 Planeación Mensual
+----------------------
+
+Para qué sirve: asignar la capacidad de los equipos a los pedidos de un mes, para calcular la fecha de entrega de cada uno. Es la pestaña más importante del sistema.
+
+Antes de empezar:
+
+- Debe haber pedidos en el mes.
+- Debe haber equipos y su disponibilidad registrada.
+
+Cómo funciona: el sistema procesa los meses en orden, de enero a diciembre. Un mes anterior siempre tiene prioridad sobre uno posterior. Por eso, al guardar un mes, los meses posteriores que ya estaban planeados se vuelven a calcular solos.
+
+Esta pestaña tiene dos formas de planear: Comparar estrategias (el sistema ordena los pedidos con una regla) y Secuencia manual (tú ordenas los pedidos). Ambas empiezan igual.
+
+Paso 1. Carga el mes.
+
+1. Elige Año y Mes.
+2. Pulsa Cargar mes.
+
+Debe verse: un mensaje como 16 pedido(s) en 2026-09. Si el mes ya tenía un plan guardado, aparece la etiqueta verde ✓ Guardado: [criterio].
+
+   📸 [CAPTURA 4.7a — Planeación Mensual con un mes cargado y la etiqueta de guardado]
+
+Opción A: Comparar estrategias
+
+Paso 2. Compara.
+
+1. Pestaña Comparar estrategias.
+2. Pulsa Comparar.
+
+Debe verse: tres columnas, una por criterio (PEPS (FIFO), Prioritario y Heurística), cada una con sus contadores de a tiempo, atrasado y crítico, y la lista de pedidos con su fecha calculada. El mensaje dice Nada fue guardado — esto es solo una comparación.
+
+   📸 [CAPTURA 4.7b — Tres columnas de comparación de criterios]
+
+Paso 3. Elige y guarda.
+
+1. Debajo de las columnas está Aplicar un criterio. Elige el criterio en Criterio a ejecutar.
+2. Pulsa Ejecutar y guardar.
+
+Debe verse: el mensaje Guardado. N pedido(s) planeado(s) con criterio…, la etiqueta ✓ Guardado actualizada y la tabla de resultados.
+
+   Para saber qué criterio conviene, mira la tarjeta que tiene menos atrasados y críticos. Si dos empatan, revisa cuáles pedidos prioritarios quedan a tiempo.
+
+Opción B: Secuencia manual
+
+Paso 2. Ordena los pedidos.
+
+1. Pestaña Secuencia manual.
+2. Verás tres bloques: ⚡ Expedite, 📦 Estándar y ⏸ Hold. Al cargar el mes, todos los pedidos están en Estándar.
+3. Arrastra cada tarjeta al bloque y al lugar que quieras. También puedes usar los botones ▲ y ▼ de cada tarjeta.
+4. Los pedidos del bloque ⏸ Hold no se planean.
+
+   📸 [CAPTURA 4.7c — Secuencia manual con pedidos repartidos en los tres bloques]
+
+Paso 3. Previsualiza.
+
+1. Pulsa Previsualizar.
+
+Debe verse: los resultados y el impacto (a tiempo, atrasados, críticos, cuello de botella) con el banner ámbar ⚠ Vista previa sin guardar. Nada se ha guardado todavía.
+
+   📸 [CAPTURA 4.7d — Vista previa con el banner de no guardado]
+
+Si no te gusta el resultado, cambia el orden y vuelve a previsualizar. Para descartar la vista previa, pulsa Descartar.
+
+Paso 4. Guarda.
+
+1. Pulsa Guardar plan.
+2. Aparece una ventana Confirmar plan. Revisa el resumen y pulsa Confirmar. Para cancelar, pulsa Cancelar.
+
+Debe verse: el mensaje Guardado. N pedido(s) planeado(s) con secuencia manual. y la etiqueta ✓ Guardado: Manual.
+
+   Cuando recargues la pestaña, el plan manual vuelve a aparecer como lo dejaste. Ten en cuenta que, después de recargar, todos los pedidos planeados aparecen en Estándar (ver sección 9).
+
+Ver los resultados: Tabla o Gantt
+
+Después de cualquier planeación (comparada, guardada o previsualizada), aparece la sección de resultados con dos pestañas: Tabla y Gantt.
+
+- Tabla: una fila por pedido, con toneladas, tipo, fecha solicitada, fecha calculada y estado. Haz clic en una fila para ver su ruta por equipos.
+- Gantt: una fila por pedido, en el orden en que se planeó. Cada barra es un equipo y las semanas en que trabajó en ese pedido. El punto al final es la fecha de entrega, con su color según el estado. La línea blanca marca la fecha solicitada. Un espacio entre dos barras significa que el pedido esperó a que el equipo tuviera capacidad.
+
+   📸 [CAPTURA 4.7e — Gantt de un plan con leyenda visible]
+   Debe verse: filas por pedido, barras de colores por equipo, puntos verde/ámbar/rojo al final, y la leyenda abajo.
+
+Errores comunes:
+
+- El botón Guardar plan está deshabilitado: falta previsualizar primero.
+- Orders [...] are not placed in any block: recarga el mes con Cargar mes y vuelve a intentarlo.
+- "No hay pedidos para previsualizar.": no hay ningún pedido en los bloques Expedite ni Estándar; todos están en Hold o no hay pedidos en el mes. Mueve al menos uno a Estándar o Expedite.
+- Un pedido aparece como error: el equipo necesario no tiene capacidad suficiente dentro del horizonte de planeación. Revisa su capacidad mensual o su disponibilidad.
+
+4.8 Ocupación
+-------------
+
+Para qué sirve: ver qué parte de la capacidad de cada equipo está comprometida, semana por semana, y qué pedidos la ocupan.
+
+Qué hacer:
+
+1. Elige Año y Mes, o usa ‹ y ›.
+2. Pulsa Ver. Se actualiza solo al cambiar el año o el mes.
+
+   📸 [CAPTURA 4.8a — Pestaña Ocupación con tarjetas y mapa de calor]
+
+Debe verse:
+
+- Cuatro tarjetas: Ocupación promedio de planta, Cuello de botella, Semana más cargada y Semanas al límite.
+- Mapa de calor: una fila por equipo, una columna por semana, y una fila Planta con el promedio de cada semana.
+- Panel de detalle abajo, que se abre con la semana más cargada.
+
+Cómo leer el mapa:
+
+   --- — ---
+   Gris, con guion — — Sin carga.
+   Azul claro — Menos de 50% comprometido.
+   Azul — Entre 50% y 85%.
+   Ámbar — Entre 85% y 100%.
+   Rojo — Al límite (100%).
+   Rojo rayado — Por encima de la capacidad.
+   Gris rayado — Cerrada.
+
+Una etiqueta cap. 80% en una celda significa que esa semana tiene capacidad reducida por disponibilidad.
+
+Ver qué pedidos ocupan una semana:
+
+Haz clic en cualquier celda. El panel de detalle muestra:
+
+- Asignado, capacidad de la semana, libre y número de pedidos.
+- La lista de pedidos que ocupan esa semana, con sus toneladas y el porcentaje de la capacidad.
+
+   📸 [CAPTURA 4.8b — Panel de detalle de una semana sobrecargada]
+   Debe verse: el aviso rojo que explica que la semana tiene más trabajo del que permite su capacidad, y la lista de pedidos.
+
+Errores comunes:
+
+- Todo aparece en guion (—): el mes no tiene planeación guardada. Ve a Planeación Mensual.
+- Aparece el aviso "Esta semana tiene más trabajo asignado…": la disponibilidad cambió después de planear. Ve a Disponibilidad y pulsa Replanificar todo.
+
+5. EJEMPLO COMPLETO: DE CERO A UN PLAN
+======================================
+
+Este ejemplo usa una planta nueva, sin datos de demostración. Tarda unos 15 minutos.
+
+Objetivo: tener cuatro equipos, un pedido, un plan de su mes y una semana con capacidad reducida.
+
+Paso 1. Crea la ruta. En Equipos, agrega estos cuatro equipos, uno por uno:
+
+   Nombre — Orden — Capacidad mensual (t) — Rendimiento — Festivos (%)
+   --- — --- — --- — --- — ---
+   Laminación — 1 — 260000 — 0.98 — 100
+   Recocido — 2 — 200000 — 0.95 — 100
+   Decapado — 3 — 160000 — 0.92 — 50
+   Galvanizado — 4 — 100000 — 0.96 — 0
+
+Debe verse: cuatro tarjetas en la ruta. Galvanizado aparece como Cuello de botella y la capacidad real de la planta es 25,000 t por semana.
+
+Paso 2. Registra un pedido. En Pedidos:
+
+- Cliente: Aceros del Norte
+- Tonelaje: 2500
+- Equipo de entrada: Galvanizado
+- Fecha de pedido: 01/09/2026 (el formato depende de tu computadora; si el campo muestra otro, usa ese)
+- Fecha solicitada: 30/09/2026
+
+Pulsa Crear pedido.
+
+Debe verse: el pedido en la tabla, con estado Sin planear.
+
+Paso 3. Revisa el material. En Requerimientos, elige el año 2026, el mes 9 y el pedido que acabas de crear.
+
+Debe verse: materia prima requerida de 3,040.40 t (2,500 t entre 0.82, el rendimiento global de la ruta). Merma total de 540.40 t.
+
+Paso 4. Planea el mes. En Planeación Mensual:
+
+1. Año 2026, Mes 9, Cargar mes.
+2. Comparar estrategias → Comparar.
+3. Elige Heurística en Criterio a ejecutar → Ejecutar y guardar.
+
+Debe verse: el pedido con una fecha calculada en la tabla de resultados y la etiqueta ✓ Guardado: Heurística.
+
+Paso 5. Lee el Gantt. En la sección de resultados, pulsa Gantt.
+
+Debe verse: una fila con cuatro barras, una por equipo, en orden. El punto final indica la fecha de entrega.
+
+Paso 6. Cambia la disponibilidad. En Disponibilidad:
+
+1. Pestaña Excepción manual.
+2. Equipo Galvanizado, Semana 38, Capacidad disponible 0, Motivo Mantenimiento mayor.
+3. Guardar excepción.
+
+Debe verse: el aviso ámbar El plan guardado tiene N semanas-equipo… Si el pedido no usó esa semana, el aviso no aparece; en ese caso, cambia la semana por una donde sí trabaje (en el Gantt, la semana de la barra de Galvanizado).
+
+Paso 7. Replanifica. Pulsa Replanificar todo.
+
+Debe verse: Listo: 1 mes replanificado… y la fecha de entrega del pedido puede haberse movido.
+
+Paso 8. Revisa el Dashboard. Ve al Dashboard y elige el mes 9 de 2026.
+
+Debe verse: la tarjeta Pedidos del mes dice 1, y Entregas a tiempo muestra el porcentaje de ese pedido.
+
+   📸 [CAPTURA 5 — Dashboard del ejemplo completo]
+
+6. DEMOSTRACIÓN: SEPTIEMBRE 2026
+================================
+
+Esta sección sirve para presentar el sistema. Requiere haber cargado los datos de demostración (sección 1.3).
+
+La historia: septiembre tiene 18 pedidos que suman cerca de 91,000 t. La planta solo puede entregar unas 100,000 t en el mes, pero las fechas solicitadas se concentran al final. El criterio que uses cambia quién llega a tiempo.
+
+Qué hacer:
+
+1. En Planeación Mensual, carga 2026 / 9.
+2. Comparar estrategias → Comparar.
+3. Observa los contadores de cada columna.
+
+Resultados que deben aparecer:
+
+   Criterio — 🟢 A tiempo — 🟡 Atrasados — 🔴 Críticos
+   --- — --- — --- — ---
+   PEPS (FIFO) — 12 — 4 — 2
+   Prioritario — 14 — 3 — 1
+   Heurística — 10 — 5 — 3
+
+   📸 [CAPTURA 6a — Comparación de los tres criterios con los contadores]
+
+Qué pasa con cada pedido clave:
+
+- Urgente Tardio es el primero en PEPS y llega a tiempo. Con Heurística se atrasa y resulta crítico, porque los pedidos grandes pasan antes.
+- Cliente VIP y Constructora Premium son prioritarios. Con PEPS llegan tarde; con Prioritario y con Heurística llegan a tiempo.
+- Pedido Grande (18,000 t) y Gran Obra Federal (16,500 t) llegan tarde con PEPS y se salvan solo con Heurística.
+
+   Preguntas para discutir: ¿qué criterio conviene a la empresa? ¿Qué pedidos sacrificarías para salvar a los demás? Ninguna respuesta es "la correcta"; el sistema solo muestra las consecuencias.
+
+Qué hacer después: elige un criterio, pulsa Ejecutar y guardar, y revisa el Gantt y el Dashboard del mes.
+
+Si tus números no coinciden: borra mrp.db, reinicia el servidor y vuelve a cargar los datos (sección 1.3). Los números dependen de que los datos se carguen completos.
+
+7. SOLUCIÓN DE PROBLEMAS
+========================
+
+Esta tabla reúne los errores más comunes.
+
+   Lo que ves — Qué significa — Qué hacer
+   --- — --- — ---
+   Error loading ASGI app. Could not import module "main" — Uvicorn no encuentra main.py desde la carpeta en que lo ejecutas. — Usa run.bat, o ejecuta uvicorn main:app --app-dir backend --reload desde la carpeta mrp-system.
+   No module named 'fastapi' — El entorno virtual no está activo o no se instalaron las dependencias. — Ejecuta venv\Scripts\activate y luego pip install -r requirements.txt.
+   FINDSTR: Cannot open backend\main.py — Estás en la carpeta equivocada. — Ve a la carpeta mrp-system con cd.
+   GET /dashboard ... 404 Not Found en la terminal — El servidor que corre es una versión vieja. — Cierra la ventana del servidor con Ctrl+C, verifica que estás en mrp-system y vuelve a abrir run.bat.
+   Address already in use o [Errno 10048] — Otro programa (quizás un servidor anterior) usa el puerto 8000. — Cierra las ventanas viejas. Si no las encuentras, en cmd escribe netstat -ano \ — findstr :8000, anota el último número (PID) y ejecuta taskkill /PID número /F.
+   La página no carga o dice que no hay conexión — El servidor (ventana 1) no está corriendo. — Abre http://localhost:8000/health. Si no responde, vuelve a abrir run.bat.
+   La página muestra datos viejos o errores raros después de un cambio — El navegador guardó la versión anterior. — Recarga con Ctrl+F5.
+   Failed to load resource: 404 en la consola del navegador — Falta un archivo de la página. — Revisa que descargaste completa la carpeta frontend.
+   ModuleNotFoundError: No module named 'manual_planning' (u otro módulo) — Falta un archivo en la carpeta backend. — Revisa que backend contenga todos sus archivos .py.
+   El script de datos muestra FAILED — El servidor no estaba corriendo o la base ya tenía datos. — Cierra el servidor, borra mrp.db, vuelve a abrirlo y repite la carga.
+   Dashboard con guiones — / — — El mes no está planeado. — Planeación Mensual → cargar el mes → Ejecutar y guardar.
+   Aviso ámbar "Plan fuera de disponibilidad" — Cambió la disponibilidad después de planear. — Pulsa Replanificar todo en Disponibilidad.
+   customer_name cannot contain < or > (o name, reason) — Escribiste < o > en un nombre o motivo. — Quítalos. El nombre del campo indica dónde está el problema.
+   "Indica una semana entre 1 y 53" — El número de semana no existe en ese año. — Revisa cuántas semanas tiene el año (2026: 53; 2027: 52).
+   Guardar plan aparece deshabilitado — No has previsualizado. — Pulsa Previsualizar primero.
+   Un pedido dice que no se puede planear — El equipo necesario no tiene capacidad suficiente en el plazo. — Revisa la capacidad mensual o la disponibilidad del equipo que aparece en el mensaje (en inglés, por ejemplo cannot fit … Equipo 2).
+
+Cómo leer un mensaje de error: si el mensaje aparece en la pantalla, sigue la indicación que dice. Si aparece en la terminal negra, busca la última línea en rojo o la que empieza con ERROR. Esa línea dice qué falta.
+
+Si nada de esto resuelve tu problema: copia el texto completo de la terminal y el paso en el que te quedaste, y pide ayuda con esa información.
+
+8. CÓMO SE CALCULA
+==================
+
+Estas reglas explican por qué los números son como son.
+
+8.1 Cuándo un pedido llega tarde
+--------------------------------
+
+Se compara la fecha calculada (siempre un domingo) con la fecha solicitada:
+
+   Días después de lo solicitado — Estado
+   --- — ---
+   7 días o menos (incluye adelantados) — 🟢 A tiempo
+   De 8 a 14 días — 🟡 Atrasado
+   Más de 14 días — 🔴 Crítico
+
+Los 7 días de tolerancia existen porque las fechas se expresan por semana. Un pedido que termina el domingo de la semana solicitada no es tarde.
+
+8.2 Materia prima y rendimiento
+-------------------------------
+
+Cada equipo descarta una parte del material. Para saber cuánto entra a la ruta, el sistema trabaja hacia atrás, desde el producto terminado:
+
+    materia prima = producto terminado ÷ (rendimiento del último equipo × … × rendimiento del primero)
+
+Ejemplo: 100 t de producto terminado, con rendimientos 0.98, 0.95, 0.92 y 0.96:
+
+    100 ÷ (0.98 × 0.95 × 0.92 × 0.96) = 121.62 t de materia prima
+    merma = 121.62 − 100 = 21.62 t
+    rendimiento global = 100 ÷ 121.62 = 82.2%
+
+8.3 Capacidad real de la planta
+-------------------------------
+
+La capacidad de cada equipo, expresada en producto terminado, descuenta lo que descartan los equipos que vienen después. El equipo con menor capacidad así calculada es el cuello de botella, y su cifra es la capacidad real de toda la planta.
+
+8.4 Ocupación
+-------------
+
+    ocupación = toneladas asignadas en la semana ÷ capacidad de esa semana × 100
+
+La capacidad de la semana ya incluye festivos, mantenimientos y bajas de productividad.
+
+8.5 Semanas y meses
+-------------------
+
+Las semanas son ISO: empiezan en lunes y la semana 1 es la que contiene el 4 de enero. Una semana pertenece al mes de su jueves. Un año puede tener 52 o 53 semanas; el sistema lo considera.
+
+9. LÍMITES CONOCIDOS
+====================
+
+Estas son las cosas que el sistema no hace todavía. Conocerlas evita sorpresas.
+
+Usuarios y seguridad
+- No tiene inicio de sesión ni usuarios. Cualquier persona con acceso a la computadora puede cambiar cualquier dato.
+- Solo funciona en la computadora donde se instala (localhost). No se puede usar desde otra computadora de la red sin configuración adicional.
+
+Catálogo de equipos
+- No se pueden editar ni eliminar equipos desde la pantalla. Si te equivocas, la única salida es corregirlo con herramientas técnicas o empezar con una base de datos nueva.
+
+Planeación
+- Cada equipo trabaja en una sola etapa a la vez: el siguiente equipo no empieza hasta que el anterior termina el pedido. No hay traslapes entre etapas.
+- Después de recargar la página, la secuencia manual muestra todos los pedidos planeados en Estándar; la diferencia entre Expedite y Estándar no se conserva.
+- Los cambios de disponibilidad no actualizan los planes guardados; hay que pulsar Replanificar todo.
+- Los pedidos sin fecha solicitada no pueden clasificarse como atrasados.
+- Al eliminar un pedido, su capacidad se libera solo cuando se vuelve a planear el mes.
+
+Disponibilidad
+- Las interrupciones aleatorias solo cubren las semanas 1 a 52. La semana 53 nunca recibe una interrupción aleatoria. (Las excepciones manuales sí pueden registrarse en la semana 53.)
+- Los festivos solo son los federales de México; no hay festivos estatales ni locales.
+
+Materiales e inventario
+- El inventario no se usa en el cálculo de requerimientos ni en la planeación.
+
+Reportes
+- No hay exportación a Excel ni PDF todavía. Los datos se consultan en pantalla.
+
+Desempeño
+- Planear muchos meses o comparar muchos criterios puede tardar algunos segundos.
+
+10. LISTA DE CAPTURAS PENDIENTES
+================================
+
+Reemplaza cada bloque [CAPTURA …] con la imagen correspondiente. Si quieres, usa esta lista para llevar el control.
+
+   Número — Sección — Qué debe mostrar
+   --- — --- — ---
+   1.1a — Iniciar — Ventana de run.bat con Uvicorn running
+   1.1b — Iniciar — Ventana de run_frontend.bat con Serving HTTP
+   1.1c — Iniciar — Dashboard abierto en localhost:5500
+   1.2 — Comprobar — {"status":"ok"} en el navegador
+   1.2b — Comprobar — Página /docs con los endpoints
+   1.3 — Datos de demostración — Terminal con la salida del script
+   1.3b — Datos de demostración — Dashboard con datos cargados
+   4.1a — Dashboard — Dashboard completo con un mes planeado
+   4.1b — Dashboard — Columna del mes seleccionada
+   4.2a — Equipos — Formulario con datos de ejemplo
+   4.2b — Equipos — Ruta de producción con cuatro equipos
+   4.3a — Pedidos — Formulario con todos los campos llenos
+   4.3b — Pedidos — Pedido en modo edición
+   4.3c — Pedidos — Tabla con filtros y estados
+   4.4a — Disponibilidad — Mapa del año con celdas de todos los colores
+   4.4b — Disponibilidad — Formulario de excepción manual
+   4.4c — Disponibilidad — Interrupciones aleatorias con resultado
+   4.4d — Disponibilidad — Aviso ámbar con Replanificar todo
+   4.5 — Calendario — Calendario de un equipo con excepciones
+   4.6a — Requerimientos — Resumen del mes
+   4.6b — Requerimientos — Recorrido del material de un pedido
+   4.7a — Planeación — Mes cargado con la etiqueta de guardado
+   4.7b — Planeación — Tres columnas de comparación
+   4.7c — Planeación — Secuencia manual en tres bloques
+   4.7d — Planeación — Vista previa con banner
+   4.7e — Planeación — Gantt con leyenda
+   4.8a — Ocupación — Tarjetas y mapa de calor
+   4.8b — Ocupación — Panel de detalle de una semana sobrecargada
+   5 — Ejemplo — Dashboard del ejemplo completo
+   6a — Demostración — Tabla de los tres criterios
